@@ -38,6 +38,15 @@ body {
   font-family: var(--font-display);
 }
 
+.title-toy {
+  color: #ffffff;
+  letter-spacing: 0.02em;
+  text-shadow:
+    0.055em 0.055em 0 var(--color-ink),
+    0 0.35em 1.1em rgba(43, 58, 85, 0.25);
+  transform: rotate(-1.5deg);
+}
+
 ::selection {
   background: var(--color-amber);
   color: var(--color-ink);

@@ -9,7 +9,7 @@ interface LetterTileProps {
   badge?: number;
   sub?: string;
   className?: string;
-  onClick?: () => void;
+  onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
 }
 
 const sizes = {

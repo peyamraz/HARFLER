@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { GROUPS, LETTERS, SENTENCES, WORDS } from "./game/letters";
-import { cancelSpeech, say, sayQuick, setMuted as setSpeechMuted } from "./game/speech";
-import { ANSWER_LIMIT_MS, useSoundGame, WAIT_SECONDS, type Phase } from "./game/useSoundGame";
-import { ConfettiLayer, makeBurst, type Burst } from "./components/Confetti";
+import { useEffect, useMemo, useState } from "react";
+import { GROUPS } from "./game/letters";
+import { REMEMBER_SECONDS, TOTAL_ROUNDS, useSoundGame } from "./game/useSoundGame";
+import { say } from "./game/speech";
+import { LetterTile, type TileState } from "./components/LetterTile";
 import { CountdownRing } from "./components/CountdownRing";
-import { LetterTile } from "./components/LetterTile";
+import { ConfettiLayer, makeBurst, type Burst } from "./components/Confetti";
 import {
   IconBolt,
   IconBook,
@@ -14,7 +14,6 @@ import {
   IconFlame,
   IconHand,
   IconPlay,
-  IconReplay,
   IconSparkle,
   IconSpeaker,
   IconStar,
@@ -24,700 +23,607 @@ import {
   IconX,
 } from "./components/Icons";
 
-const MUTE_KEY = "anetil.muted.v1";
+/* ------------------------------------------------ küçük yardımcılar */
 
-/* ---------------- yardımcı parçalar ---------------- */
-
-function ToyButton({
-  children,
-  onClick,
-  color = "bg-amber",
-  className = "",
-}: {
-  children: React.ReactNode;
-  onClick?: () => void;
-  color?: string;
-  className?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`btn-toy rounded-xl ${color} font-display font-semibold text-ink px-6 py-3 inline-flex items-center gap-2.5 ${className}`}
-    >
-      {children}
-    </button>
-  );
+function starsFor(score: number): number {
+  if (score >= 160) return 3;
+  if (score >= 100) return 2;
+  if (score >= 50) return 1;
+  return 0;
 }
 
-function Chip({ children, tone = "paper" }: { children: React.ReactNode; tone?: "paper" | "amber" }) {
-  return (
-    <span
-      className={`sticker-sm rounded-lg px-3 py-1.5 inline-flex items-center gap-2 font-bold text-sm ${
-        tone === "amber" ? "bg-amber" : "bg-paper"
-      }`}
-    >
-      {children}
-    </span>
-  );
-}
+const FLOAT_LETTERS = ["A", "N", "E", "T", "İ", "L", "O", "K", "U", "R", "Ü", "S", "Ö", "Y", "D", "Z", "Ç", "B", "G", "Ş", "P", "Ğ", "F", "J"];
+const FLOAT_COLORS = ["#ff6b6b", "#ffc145", "#6bcb77", "#4d96ff", "#b983ff", "#2ec4b6"];
 
-function MysteryTile({ wiggle }: { wiggle?: boolean }) {
-  return (
-    <div
-      className={`sticker rounded-2xl w-24 h-24 sm:w-28 sm:h-28 bg-ink text-sand font-display font-bold text-6xl flex items-center justify-center ${
-        wiggle ? "anim-wiggle" : ""
-      }`}
-      aria-label="Gizli harf"
-    >
-      ?
-    </div>
+function FloatingLetters() {
+  const items = useMemo(
+    () =>
+      Array.from({ length: 16 }, (_, i) => ({
+        ch: FLOAT_LETTERS[(i * 7 + 3) % FLOAT_LETTERS.length],
+        left: `${(i * 41 + 5) % 96}%`,
+        top: `${(i * 29 + 8) % 92}%`,
+        size: 22 + ((i * 13) % 26),
+        rot: ((i * 37) % 40) - 20,
+        dur: 8 + ((i * 11) % 7),
+        delay: (i * 19) % 8,
+        color: FLOAT_COLORS[i % FLOAT_COLORS.length],
+      })),
+    [],
   );
-}
-
-function FloatLetters() {
   return (
-    <div className="fixed inset-0 overflow-hidden pointer-events-none z-0" aria-hidden>
-      {LETTERS.map((l, i) => (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden>
+      {items.map((f, i) => (
         <span
-          key={l.id}
-          className={`absolute font-display font-bold anim-floaty ${i % 2 ? "hidden md:block" : ""}`}
+          key={i}
+          className="anim-floaty font-display font-bold absolute select-none"
           style={
             {
-              color: l.chip,
-              opacity: 0.14,
-              fontSize: `${110 + (i * 37) % 90}px`,
-              left: ["2%", "84%", "8%", "88%", "42%", "70%"][i],
-              top: ["14%", "8%", "58%", "52%", "86%", "78%"][i],
-              "--fr": `${(i * 47) % 30 - 15}deg`,
-              "--fdur": `${8 + (i * 13) % 6}s`,
-              "--fdel": `${(i * 11) % 7}s`,
+              left: f.left,
+              top: f.top,
+              fontSize: f.size,
+              color: f.color,
+              opacity: 0.16,
+              "--fr": `${f.rot}deg`,
+              "--fdur": `${f.dur}s`,
+              "--fdel": `${f.delay}s`,
             } as React.CSSProperties
           }
         >
-          {l.char}
+          {f.ch}
         </span>
       ))}
     </div>
   );
 }
 
-const STEPS = [
-  {
-    icon: IconEar,
-    color: "bg-coral",
-    title: "Dinle",
-    text: "Ses kutusuna dokun, harfin sesini duy.",
-  },
-  {
-    icon: IconBrain,
-    color: "bg-sky",
-    title: `${WAIT_SECONDS} saniye akılda tut`,
-    text: "Geri sayım bitene kadar sesi hatırla.",
-  },
-  {
-    icon: IconHand,
-    color: "bg-leaf",
-    title: "Sesi söyle, harfi bul",
-    text: "Doğru harfe dokun; hız ve seri ekstra puan getirir!",
-  },
-];
+function SectionHead({
+  kicker,
+  title,
+  desc,
+  right,
+}: {
+  kicker: string;
+  title: string;
+  desc?: string;
+  right?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 mb-5 flex-wrap">
+      <div>
+        <p className="text-[11px] font-black tracking-[0.22em] text-sky-deep uppercase mb-1">{kicker}</p>
+        <h2 className="font-display font-bold text-2xl sm:text-3xl text-ink leading-tight">{title}</h2>
+        {desc && <p className="text-ink-soft font-semibold text-sm mt-1.5 max-w-xl">{desc}</p>}
+      </div>
+      {right}
+    </div>
+  );
+}
 
-/* ---------------- uygulama ---------------- */
+function StatChip({
+  label,
+  value,
+  icon,
+  accent = "text-ink",
+}: {
+  label: string;
+  value: React.ReactNode;
+  icon?: React.ReactNode;
+  accent?: string;
+}) {
+  return (
+    <div className="sticker-sm rounded-lg bg-paper px-3.5 py-2 flex items-center gap-2.5">
+      {icon}
+      <div className="leading-none">
+        <p className="text-[9px] font-black tracking-[0.18em] text-ink-soft uppercase mb-1">{label}</p>
+        <p key={String(value)} className={`font-display font-bold text-lg anim-pop ${accent}`}>
+          {value}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------ ana bileşen */
 
 export default function App() {
-  const g = useSoundGame();
-  const [muted, setMutedState] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem(MUTE_KEY) === "1";
-    } catch {
-      return false;
-    }
-  });
+  const [gIdx, setGIdx] = useState(0);
+  const group = GROUPS[gIdx];
+  const g = useSoundGame(group);
   const [bursts, setBursts] = useState<Burst[]>([]);
-  const [spokenWord, setSpokenWord] = useState<string | null>(null);
-  const [spokenSentence, setSpokenSentence] = useState<number | null>(null);
-  const [seqPlaying, setSeqPlaying] = useState(false);
-  const gameRef = useRef<HTMLDivElement>(null);
-  const seqTimers = useRef<number[]>([]);
 
+  /* oyun kartından kabaran konfeti olaylarını dinle */
   useEffect(() => {
-    setSpeechMuted(muted);
-    try {
-      localStorage.setItem(MUTE_KEY, muted ? "1" : "0");
-    } catch {
-      /* yok say */
-    }
-  }, [muted]);
-
-  useEffect(() => () => seqTimers.current.forEach((t) => window.clearTimeout(t)), []);
-
-  // yeni rekor konfetisi
-  useEffect(() => {
-    if (g.phase === "done" && g.newBest) {
-      const b = makeBurst(window.innerWidth / 2, window.innerHeight / 3, 26);
-      setBursts((prev) => [...prev, b]);
-      const t = window.setTimeout(() => setBursts((prev) => prev.filter((x) => x.id !== b.id)), 1300);
-      return () => window.clearTimeout(t);
-    }
-  }, [g.phase, g.newBest]);
-
-  const spawnBurst = useCallback((el: HTMLElement | null, count = 18) => {
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    const b = makeBurst(r.left + r.width / 2, r.top + r.height / 2, count);
-    setBursts((prev) => [...prev, b]);
-    window.setTimeout(() => setBursts((prev) => prev.filter((x) => x.id !== b.id)), 1200);
+    const onBurst = (e: Event) => {
+      const d = (e as CustomEvent<{ x: number; y: number }>).detail;
+      const b = makeBurst(d.x, d.y);
+      setBursts((prev) => [...prev.slice(-3), b]);
+      window.setTimeout(() => setBursts((prev) => prev.filter((x) => x.id !== b.id)), 1400);
+    };
+    window.addEventListener("ses-avi-burst", onBurst);
+    return () => window.removeEventListener("ses-avi-burst", onBurst);
   }, []);
 
-  const playSequence = useCallback(() => {
-    if (seqPlaying) return;
-    setSeqPlaying(true);
-    LETTERS.forEach((l, i) => {
-      const t = window.setTimeout(() => say(l.say, { rate: 0.75 }), i * 950);
-      seqTimers.current.push(t);
-    });
-    const end = window.setTimeout(() => setSeqPlaying(false), LETTERS.length * 950 + 400);
-    seqTimers.current.push(end);
-  }, [seqPlaying]);
+  const inRun = g.status !== "start" && g.status !== "done";
+  const stars = starsFor(g.score);
+  const letterLine = group.letters.map((l) => l.char).join(" · ");
 
-  const startAndScroll = useCallback(() => {
-    gameRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    window.setTimeout(() => g.actions.start(), 250);
-  }, [g.actions]);
-
-  // klavye: 1-6 seçim, boşluk/enter başlat
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.repeat) return;
-      if (g.phase === "answer") {
-        const n = Number(e.key);
-        if (n >= 1 && n <= g.options.length) {
-          g.actions.pick(g.options[n - 1].id);
-        }
-      } else if ((g.phase === "idle" || g.phase === "done") && (e.key === " " || e.key === "Enter")) {
-        e.preventDefault();
-        g.actions.start();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [g.phase, g.options, g.actions]);
-
-  const phaseTitle: Record<Phase, { big: string; small: string }> = {
-    idle: { big: "Ses avına hazır mısın?", small: "Başlat'a dokun; 10 tur boyunca sesleri avla." },
-    listen: { big: "Dinle…", small: "Ses kutusu harfin sesini söylüyor." },
-    wait: { big: "Akılda tut!", small: `${WAIT_SECONDS} saniye içinde sesi hatırla.` },
-    answer: { big: "Şimdi sesi söyle!", small: "Duyduğun ses hangi harfe ait? Dokun!" },
-    reveal: { big: "Bak bakalım…", small: "Doğru ses birazdan tekrar söylenecek." },
-    done: { big: "Av bitti!", small: "İşte karnen:" },
+  const tileState = (id: string): TileState => {
+    if (g.correctId === id) return "correct";
+    if (g.wrongId === id) return "wrong";
+    if (g.status === "feedback" && g.correctId && g.correctId !== id) return "dim";
+    return "idle";
   };
 
-  const inRound = g.phase === "listen" || g.phase === "wait" || g.phase === "answer" || g.phase === "reveal";
+  const playAll = () => {
+    let i = 0;
+    const next = () => {
+      if (i >= group.letters.length) return;
+      const l = group.letters[i];
+      i += 1;
+      say(`${l.say}, ${l.word}`, { rate: 0.85, onEnd: () => window.setTimeout(next, 260) });
+    };
+    next();
+  };
 
   return (
-    <div className="bg-scene min-h-screen relative overflow-x-hidden">
-      <div className="fixed inset-0 bg-dots pointer-events-none z-0" aria-hidden />
-      <FloatLetters />
+    <div className="min-h-screen bg-scene relative overflow-x-hidden">
+      <div className="fixed inset-0 bg-dots pointer-events-none" aria-hidden />
+      <FloatingLetters />
       <ConfettiLayer bursts={bursts} />
 
-      {/* ---------------- üst çubuk ---------------- */}
-      <header className="sticky top-0 z-40 bg-mint/95 border-b-[3px] border-ink">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="flex -space-x-1.5" aria-hidden>
-              {LETTERS.map((l, i) => (
-                <span
-                  key={l.id}
-                  className={`w-8 h-8 rounded-lg border-2 border-ink ${l.bg} ${l.fg} font-display font-semibold text-sm flex items-center justify-center ${
-                    i === 0 ? "-rotate-6" : i === 5 ? "rotate-6" : ""
-                  }`}
-                >
-                  {l.char}
-                </span>
-              ))}
+      <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 pt-6 pb-14">
+        {/* ---------------- başlık ---------------- */}
+        <header className="flex items-center justify-between gap-3 mb-7">
+          <div className="flex items-center gap-3.5">
+            <div className="sticker w-13 h-13 sm:w-14 sm:h-14 rounded-xl bg-coral flex items-center justify-center text-white -rotate-3">
+              <IconEar className="w-7 h-7" />
             </div>
-            <div className="leading-tight">
-              <p className="font-display font-bold text-lg">ANETİL Ses Avı</p>
-              <p className="text-[11px] font-bold text-ink-soft -mt-0.5">1. sınıf · 1. ses grubu</p>
+            <div>
+              <h1 className="title-toy font-display font-bold text-3xl sm:text-4xl leading-none">
+                SES AVI
+              </h1>
+              <p className="text-ink-soft text-[11px] sm:text-xs font-bold tracking-[0.22em] uppercase mt-1.5">
+                Dinle · Akılda Tut · Harfi Avla
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Chip>
-              <IconSparkle className="w-4 h-4 text-coral" />
-              <span key={g.score} className="anim-pop tabular-nums">
-                {g.score}
-              </span>
-              <span className="text-ink-soft font-bold text-xs hidden sm:inline">puan</span>
-            </Chip>
-            <Chip tone="amber">
-              <IconTrophy className="w-4 h-4" />
-              <span key={g.best} className="anim-pop tabular-nums">
-                {g.best}
-              </span>
-              <span className="text-ink/60 font-bold text-xs hidden sm:inline">rekor</span>
-            </Chip>
+          <div className="flex items-center gap-2.5">
+            <span className="hidden sm:inline-flex sticker-sm rounded-full bg-amber px-3.5 py-2 items-center gap-1.5 text-[11px] font-black text-ink rotate-1">
+              <IconSparkle className="w-4 h-4" /> Maarif Modeli 2026-2027
+            </span>
             <button
               type="button"
-              onClick={() => setMutedState((m) => !m)}
-              className="btn-toy rounded-xl bg-paper w-11 h-11 flex items-center justify-center"
-              aria-label={muted ? "Sesi aç" : "Sesi kapat"}
-              title={muted ? "Sesi aç" : "Sesi kapat"}
+              onClick={g.toggleMute}
+              className="btn-toy sticker-sm w-11 h-11 rounded-lg bg-paper text-ink flex items-center justify-center"
+              aria-label={g.muted ? "Sesi aç" : "Sesi kapat"}
+              title={g.muted ? "Sesi aç" : "Sesi kapat"}
             >
-              {muted ? <IconVolumeOff className="w-5 h-5 text-coral" /> : <IconVolume className="w-5 h-5 text-leaf-deep" />}
+              {g.muted ? <IconVolumeOff className="w-5 h-5" /> : <IconVolume className="w-5 h-5" />}
             </button>
           </div>
-        </div>
-      </header>
+        </header>
 
-      <main className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6">
-        {/* ---------------- açılış: harf blokları ---------------- */}
-        <section className="pt-10 sm:pt-14 pb-8">
-          <div className="grid lg:grid-cols-[1fr_auto] gap-8 items-center">
-            <div>
-              <p className="inline-flex items-center gap-2 sticker-sm rounded-full bg-sand px-4 py-1.5 text-xs font-black tracking-wide text-ink-soft mb-4">
-                <IconSparkle className="w-4 h-4 text-amber-deep" />
-                Maarif Modeli 2024-25 · Eski ELAKİN'in yerine
-              </p>
-              <h1 className="font-display font-bold text-4xl sm:text-6xl leading-[1.05]">
-                Sesleri duy,
-                <br />
-                harfleri <span className="text-coral">avla!</span>
-              </h1>
-              <p className="mt-4 text-lg font-semibold text-ink-soft max-w-md">
-                İlk okuma-yazmanın 6 sesi: bloklara dokun, sesleri dinle; oyunda dinlediğin sesi
-                bulup <strong className="text-ink">ekstra puan</strong> kazan.
-              </p>
-              <div className="mt-6 flex flex-wrap items-center gap-3">
-                <ToyButton color="bg-coral" className="text-white text-lg px-7 py-3.5" onClick={startAndScroll}>
-                  <IconPlay className="w-5 h-5" /> Oyuna Başla
-                </ToyButton>
-                <ToyButton color="bg-paper" onClick={playSequence}>
-                  <IconSpeaker className={`w-5 h-5 text-sky-deep ${seqPlaying ? "anim-pulse-soft" : ""}`} />
-                  {seqPlaying ? "Okunuyor…" : "Sırayla Dinle"}
-                </ToyButton>
-              </div>
-            </div>
+        <p className="sm:hidden sticker-sm inline-flex rounded-full bg-amber px-3 py-1.5 items-center gap-1.5 text-[10px] font-black text-ink mb-5">
+          <IconSparkle className="w-3.5 h-3.5" /> Maarif Modeli 2026-2027
+        </p>
 
-            {/* etkileşimli harf blokları */}
-            <div className="flex flex-wrap justify-center gap-3 sm:gap-4 lg:max-w-md">
-              {LETTERS.map((l, i) => (
-                <div key={l.id} className="anim-hero" style={{ "--fdel": `${i * 0.18}s` } as React.CSSProperties}>
-                  <LetterTile
-                    letter={l}
-                    size="xl"
-                    badge={i + 1}
-                    sub={l.word}
-                    onClick={() => say(`${l.say}, ${l.word}`, { rate: 0.8 })}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* nasıl oynanır adımları */}
-          <div className="mt-12 grid sm:grid-cols-3 gap-4">
-            {STEPS.map((s, i) => (
-              <div key={s.title} className="sticker-sm rounded-xl bg-paper p-4 flex items-start gap-3.5">
-                <span
-                  className={`w-11 h-11 shrink-0 rounded-xl ${s.color} border-[3px] border-ink text-white flex items-center justify-center`}
+        {/* ---------------- grup seçici ---------------- */}
+        <nav className="mb-8" aria-label="Ses grupları">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1.5 -mx-1 px-1">
+            <span className="text-[11px] font-black tracking-[0.18em] uppercase text-ink-soft whitespace-nowrap mr-1">
+              Ses Grupları
+            </span>
+            {GROUPS.map((gr, i) => {
+              const active = i === gIdx;
+              return (
+                <button
+                  key={gr.id}
+                  type="button"
+                  onClick={() => setGIdx(i)}
+                  className={`btn-toy sticker-sm rounded-full px-3.5 py-2 whitespace-nowrap font-display font-semibold text-sm transition-colors ${
+                    active ? "bg-ink text-paper" : "bg-paper text-ink hover:bg-mint"
+                  }`}
+                  aria-pressed={active}
                 >
-                  <s.icon className="w-6 h-6" />
-                </span>
-                <div>
-                  <p className="font-display font-semibold">
-                    <span className="text-ink-soft mr-1.5">{i + 1}.</span>
-                    {s.title}
-                  </p>
-                  <p className="text-sm font-semibold text-ink-soft mt-0.5">{s.text}</p>
-                </div>
-              </div>
-            ))}
+                  <span className={active ? "text-amber" : "text-coral"}>{gr.no}.</span> {gr.name}
+                </button>
+              );
+            })}
           </div>
-        </section>
+        </nav>
 
-        {/* ---------------- oyun ---------------- */}
-        <section ref={gameRef} className="py-8 scroll-mt-24">
-          <div className="sticker rounded-2xl bg-paper p-5 sm:p-8">
-            {/* tur üst bilgisi */}
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-              <div className="flex items-center gap-3">
-                <h2 className="font-display font-bold text-2xl">Ses Avı</h2>
-                <span className="sticker-sm rounded-lg bg-mint px-3 py-1 font-black text-sm tabular-nums">
-                  Tur {Math.min(g.round + 1, 10)}/10
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                {g.streak >= 2 && (
-                  <span className="sticker-sm rounded-lg bg-coral text-white px-3 py-1 font-black text-sm inline-flex items-center gap-1.5 anim-pop">
-                    <IconFlame className="w-4 h-4" /> {g.streak} seri
-                  </span>
-                )}
-                <div className="flex gap-1.5" aria-label="Tur sonuçları">
-                  {g.results.map((r, i) => (
-                    <span
-                      key={i}
-                      className={`w-3.5 h-3.5 rounded border-2 border-ink ${
-                        r === "ok"
-                          ? "bg-leaf"
-                          : r === "no"
-                            ? "bg-coral"
-                            : i === g.round && inRound
-                              ? "bg-amber anim-blink"
-                              : "bg-mint-deep"
-                      }`}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* sahne */}
-            <div className="min-h-[300px] sm:min-h-[330px] flex flex-col items-center justify-center text-center">
-              {g.phase === "idle" && (
-                <div className="anim-pop flex flex-col items-center">
-                  <span className="w-20 h-20 rounded-full bg-mint border-[3px] border-ink flex items-center justify-center mb-4">
-                    <IconEar className="w-10 h-10 text-sky-deep" />
-                  </span>
-                  <p className="font-display font-bold text-2xl sm:text-3xl mb-2">{phaseTitle.idle.big}</p>
-                  <p className="text-ink-soft font-semibold mb-6 max-w-sm">{phaseTitle.idle.small}</p>
-                  <ToyButton color="bg-leaf" className="text-white text-lg px-8 py-4" onClick={g.actions.start}>
-                    <IconPlay className="w-5 h-5" /> Avı Başlat
-                  </ToyButton>
-                  <p className="mt-4 text-sm font-bold text-ink-soft hidden sm:block">
-                    İpucu: klavyede <span className="sticker-sm rounded bg-mint px-1.5">1</span>–
-                    <span className="sticker-sm rounded bg-mint px-1.5">6</span> tuşları harf seçer,{" "}
-                    <span className="sticker-sm rounded bg-mint px-1.5">Boşluk</span> başlatır.
-                  </p>
-                </div>
-              )}
-
-              {(g.phase === "listen" || g.phase === "wait") && (
-                <div className="anim-pop flex flex-col items-center">
-                  <div className="flex items-center gap-6 sm:gap-10 mb-6">
-                    <button
-                      type="button"
-                      onClick={g.actions.replay}
-                      disabled={g.phase !== "wait"}
-                      key={g.saidNow}
-                      className={`w-24 h-24 sm:w-28 sm:h-28 rounded-full sticker bg-amber flex items-center justify-center ${
-                        g.phase === "listen" ? "anim-pulse-soft" : "btn-toy"
-                      }`}
-                      aria-label="Sesi tekrar dinle"
-                      title="Sesi tekrar dinle"
-                    >
-                      <IconSpeaker className="w-12 h-12 text-ink" />
-                    </button>
-                    <MysteryTile wiggle={g.phase === "wait"} />
-                  </div>
-                  <p className="font-display font-bold text-2xl sm:text-3xl mb-1">{phaseTitle[g.phase].big}</p>
-                  <p className="text-ink-soft font-semibold mb-5">{phaseTitle[g.phase].small}</p>
-                  {g.phase === "wait" && <CountdownRing remaining={g.waitRemaining} total={WAIT_SECONDS} />}
-                </div>
-              )}
-
-              {g.phase === "answer" && (
-                <div className="anim-pop w-full flex flex-col items-center">
-                  <div className="flex items-center gap-3 mb-4">
-                    <IconHand className="w-8 h-8 text-leaf-deep" />
-                    <p className="font-display font-bold text-2xl sm:text-3xl">{phaseTitle.answer.big}</p>
-                  </div>
-                  <p className="text-ink-soft font-semibold mb-2">{phaseTitle.answer.small}</p>
-
-                  {/* seçenekler */}
-                  <div className="grid grid-cols-3 gap-3 sm:gap-4 mb-5">
-                    {g.options.map((l, i) => (
-                      <div key={l.id} className="relative">
-                        <LetterTile letter={l} size="lg" onClick={() => g.actions.pick(l.id)} />
-                        <span className="absolute -top-2 -right-1 hidden md:flex w-6 h-6 rounded-full bg-ink text-mint text-xs font-black items-center justify-center border-2 border-paper">
-                          {i + 1}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={g.actions.replay}
-                      className="btn-toy sticker-sm rounded-lg bg-sand px-4 py-2 font-display font-semibold inline-flex items-center gap-2"
-                    >
-                      <IconReplay className="w-4 h-4" /> Sesi Tekrar Dinle
-                    </button>
-                  </div>
-
-                  {/* güvenlik süresi çubuğu */}
-                  <div className="w-full max-w-sm h-3 rounded-full border-2 border-ink bg-mint mt-5 overflow-hidden">
-                    <div
-                      key={`bar-${g.round}-${g.phase}`}
-                      className="h-full bg-coral anim-shrink"
-                      style={{ animationDuration: `${ANSWER_LIMIT_MS}ms` }}
-                    />
-                  </div>
-                  <p className="text-xs font-bold text-ink-soft mt-1.5">Süre bitmeden harfe dokun!</p>
-                </div>
-              )}
-
-              {g.phase === "reveal" && g.feedback && (
-                <div className="w-full flex flex-col items-center">
-                  {/* geri bildirim pankartı */}
-                  <div
-                    className={`sticker-sm rounded-xl px-5 py-3.5 mb-5 anim-pop relative ${
-                      g.feedback.kind === "correct" ? "bg-leaf text-white" : "bg-sand"
-                    }`}
+        <main className="grid lg:grid-cols-[minmax(0,1fr)_340px] gap-7 items-start">
+          <div className="flex flex-col gap-7 min-w-0">
+            {/* ---------------- harfleri tanı ---------------- */}
+            <section id="harfler" className="sticker rounded-2xl bg-paper p-5 sm:p-7">
+              <SectionHead
+                kicker={`${group.no}. Grup · ${group.name}`}
+                title="Önce sesleri tanı"
+                desc="Harfe dokun, sesi duy ve yüksek sesle tekrar et. Hazır olunca oyuna geç."
+                right={
+                  <button
+                    type="button"
+                    onClick={playAll}
+                    className="btn-toy sticker-sm rounded-lg bg-sky text-white px-4 py-2.5 font-display font-semibold text-sm flex items-center gap-2"
                   >
-                    {g.feedback.kind === "correct" ? (
-                      <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
-                        <span className="font-display font-bold text-xl">{g.feedback.praise}</span>
-                        <span className="sticker-sm rounded-lg bg-paper text-ink px-2.5 py-0.5 font-black text-sm">
-                          +{g.feedback.gained} puan
-                        </span>
-                        {g.feedback.speedBonus && (
-                          <span className="inline-flex items-center gap-1 rounded-lg bg-sky text-white border-2 border-ink px-2 py-0.5 text-xs font-black">
-                            <IconBolt className="w-3.5 h-3.5" /> +5 hızlı kulak
-                          </span>
-                        )}
-                        {g.feedback.streakBonus && (
-                          <span className="inline-flex items-center gap-1 rounded-lg bg-coral text-white border-2 border-ink px-2 py-0.5 text-xs font-black">
-                            <IconFlame className="w-3.5 h-3.5" /> +5 seri bonusu
-                          </span>
-                        )}
-                        {g.feedback.speedBonus && g.feedback.streakBonus && (
-                          <span className="inline-flex items-center gap-1 rounded-lg bg-amber text-ink border-2 border-ink px-2 py-0.5 text-xs font-black anim-blink">
-                            <IconSparkle className="w-3.5 h-3.5" /> EKSTRA PUAN!
-                          </span>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-center gap-2.5">
-                        {g.feedback.kind === "timeout" ? <IconX className="w-5 h-5 text-coral" /> : null}
-                        <span className="font-display font-bold">
-                          {g.feedback.kind === "timeout" ? "Süre doldu!" : "Olsun, bir dahaki sefere!"}
-                        </span>
-                        <span className="font-bold text-ink-soft">Doğru harf:</span>
-                        <span
-                          className={`w-8 h-8 rounded-lg ${g.target.bg} ${g.target.fg} border-2 border-ink font-display font-bold flex items-center justify-center`}
-                        >
-                          {g.target.char}
-                        </span>
-                      </div>
-                    )}
+                    <IconPlay className="w-4 h-4" /> Sırayla Dinle
+                  </button>
+                }
+              />
+              <div className="flex flex-wrap justify-center gap-4 sm:gap-5 py-3">
+                {group.letters.map((l, i) => (
+                  <div key={l.id} className="anim-pop" style={{ animationDelay: `${i * 70}ms` }}>
+                    <LetterTile
+                      letter={l}
+                      size="xl"
+                      sub={l.word}
+                      onClick={() => say(`${l.say}, ${l.word}`, { rate: 0.85 })}
+                    />
                   </div>
+                ))}
+              </div>
+              <p className="text-center text-[11px] font-bold text-ink-soft mt-3 tracking-wide">
+                Bu grubun sesleri: <span className="text-ink">{letterLine}</span>
+              </p>
+            </section>
 
-                  <p className="font-semibold text-ink-soft mb-4 inline-flex items-center gap-2">
-                    <IconSpeaker className="w-5 h-5 text-sky-deep anim-pulse-soft" />
-                    “{g.target.say}” sesi {g.target.char} harfi — dinle ve tekrar et!
+            {/* ---------------- ses avı oyunu ---------------- */}
+            <section className="sticker rounded-2xl bg-paper p-5 sm:p-7" aria-label="Ses avı oyunu">
+              <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
+                <div>
+                  <p className="text-[11px] font-black tracking-[0.22em] text-coral-deep uppercase mb-1">
+                    Oyun Zamanı
                   </p>
+                  <h2 className="font-display font-bold text-2xl sm:text-3xl text-ink leading-tight">
+                    Sesleri duy, harfleri avla!
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={g.stopGame}
+                  disabled={!inRun}
+                  className="btn-toy sticker-sm rounded-lg bg-coral text-white px-4 py-2.5 font-display font-semibold text-sm flex items-center gap-2"
+                  title="Oyunu durdur"
+                >
+                  <IconX className="w-4 h-4" /> Oyunu Durdur
+                </button>
+              </div>
 
-                  <div className="grid grid-cols-3 gap-3 sm:gap-4">
-                    {g.options.map((l) => (
+              {/* skor şeridi */}
+              <div className="flex flex-wrap gap-2.5 mb-5">
+                <StatChip label="Skor" value={g.score} accent="text-coral-deep" icon={<IconStar className="w-4 h-4 text-amber-deep" filled />} />
+                <StatChip label="Tur" value={`${Math.max(g.round, 1)}/${TOTAL_ROUNDS}`} icon={<IconBolt className="w-4 h-4 text-sky" />} />
+                <StatChip
+                  label="Seri"
+                  value={g.streak}
+                  accent={g.streak >= 3 ? "text-coral-deep" : "text-ink"}
+                  icon={<IconFlame className={`w-4 h-4 ${g.streak >= 3 ? "text-coral" : "text-ink-soft"}`} />}
+                />
+                <StatChip label="Rekor" value={g.record} accent="text-sky-deep" icon={<IconTrophy className="w-4 h-4 text-amber-deep" />} />
+              </div>
+
+              {/* ---- başlangıç ekranı ---- */}
+              {g.status === "start" && (
+                <div className="rounded-xl bg-mint border-3 border-dashed border-mint-deep px-5 py-9 text-center anim-pop">
+                  <div className="sticker-sm w-16 h-16 rounded-xl bg-sky text-white flex items-center justify-center mx-auto mb-4 rotate-2">
+                    <IconEar className="w-9 h-9" />
+                  </div>
+                  <h3 className="font-display font-bold text-2xl text-ink mb-1.5">
+                    {group.no}. Grup · {group.name}
+                  </h3>
+                  <p className="text-ink-soft font-semibold text-sm max-w-md mx-auto mb-5">
+                    Bilgisayar bir ses söyleyecek. <span className="text-ink font-black">5 saniye</span> aklında
+                    tut, sonra doğru harfe dokun ve sesi sen söyle! Hızlı cevap ve seri doğrular{" "}
+                    <span className="text-coral-deep font-black">ekstra puan</span> kazandırır.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={g.startGame}
+                    className="btn-toy sticker rounded-xl bg-coral text-white px-8 py-4 font-display font-bold text-xl inline-flex items-center gap-3"
+                  >
+                    <IconPlay className="w-6 h-6" /> OYUNA BAŞLA
+                  </button>
+                  <p className="text-[11px] font-bold text-ink-soft mt-4">
+                    Klavyede 1–{group.letters.length} tuşları harf seçer · Boşluk oyunu başlatır
+                  </p>
+                  {!g.speechOk && (
+                    <p className="text-[11px] font-bold text-coral-deep mt-2">
+                      Tarayıcında ses sentezi bulunamadı; oyun sessiz modda ilerler.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* ---- dinletme ---- */}
+              {g.status === "playing" && (
+                <div className="rounded-xl bg-mint px-5 py-10 text-center anim-pop">
+                  <div className="sticker-sm w-16 h-16 rounded-xl bg-amber text-ink flex items-center justify-center mx-auto mb-4 anim-wiggle">
+                    <IconSpeaker className="w-9 h-9" />
+                  </div>
+                  <p className="font-display font-bold text-xl text-ink">Ses geliyor, kulaklar hazır mı?</p>
+                  <p className="text-ink-soft font-semibold text-sm mt-1.5">
+                    Tur {g.round}/{TOTAL_ROUNDS} · {group.name} sesleri
+                  </p>
+                </div>
+              )}
+
+              {/* ---- akılda tutma: 5 saniye ---- */}
+              {g.status === "remember" && g.target && (
+                <div className="rounded-xl bg-sand px-5 py-8 text-center anim-pop">
+                  <p className="font-display font-bold text-xl sm:text-2xl text-ink mb-1">
+                    Bu sesi aklında tut!
+                  </p>
+                  <p className="text-ink-soft font-semibold text-sm mb-5">
+                    5 saniye sonra harfler açılacak ve sesi sen söyleyeceksin.
+                  </p>
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
+                    <div className="sticker w-24 h-24 rounded-2xl bg-ink text-paper font-display font-bold text-5xl flex items-center justify-center anim-pulse-soft">
+                      ?
+                    </div>
+                    <CountdownRing remaining={g.rememberLeft} total={REMEMBER_SECONDS} />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={g.replaySound}
+                    className="btn-toy sticker-sm rounded-lg bg-paper text-ink px-4 py-2.5 font-display font-semibold text-sm inline-flex items-center gap-2 mt-6"
+                  >
+                    <IconSpeaker className="w-4 h-4 text-sky" /> Sesi Tekrar Dinle
+                  </button>
+                </div>
+              )}
+
+              {/* ---- cevap: sesi söyle, harfi bul ---- */}
+              {g.status === "answer" && g.target && (
+                <div className="anim-pop">
+                  <div className="text-center mb-5">
+                    <p className="font-display font-bold text-2xl sm:text-3xl text-ink">Şimdi sesi söyle!</p>
+                    <p className="text-ink-soft font-semibold text-sm mt-1.5">
+                      Dikkat! Süre dolarsa harfler kaybolur. Doğru harfe dokun:
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap justify-center gap-3 sm:gap-4 mb-6">
+                    {g.tiles.map((l, i) => (
                       <LetterTile
                         key={l.id}
                         letter={l}
                         size="lg"
-                        state={
-                          l.id === g.target.id
-                            ? "correct"
-                            : l.id === g.picked
-                              ? "wrong"
-                              : "dim"
-                        }
+                        badge={i + 1}
+                        state={g.wrongId === l.id ? "wrong" : "idle"}
+                        onClick={(e) => g.pick(l, e.currentTarget)}
                       />
                     ))}
+                  </div>
+                  <div className="h-4 rounded-full bg-mint-deep overflow-hidden sticker-sm">
+                    <div
+                      className="h-full bg-amber rounded-full"
+                      style={{ width: `${(g.rememberLeft / REMEMBER_SECONDS) * 100}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-center gap-3 mt-5">
+                    <button
+                      type="button"
+                      onClick={g.replaySound}
+                      className="btn-toy sticker-sm rounded-lg bg-paper text-ink px-4 py-2.5 font-display font-semibold text-sm inline-flex items-center gap-2"
+                    >
+                      <IconSpeaker className="w-4 h-4 text-sky" /> Tekrar Dinle
+                    </button>
+                    <button
+                      type="button"
+                      onClick={g.reveal}
+                      className="text-[11px] font-black text-ink-soft underline underline-offset-4 hover:text-coral-deep"
+                    >
+                      Bilemedim, göster
+                    </button>
                   </div>
                 </div>
               )}
 
-              {g.phase === "done" && (
-                <div className="anim-pop flex flex-col items-center">
-                  {g.newBest && (
-                    <span className="sticker-sm rounded-full bg-amber px-4 py-1.5 font-black text-sm inline-flex items-center gap-2 mb-4 anim-pop">
-                      <IconTrophy className="w-4 h-4" /> YENİ REKOR!
-                    </span>
+              {/* ---- geri bildirim ---- */}
+              {g.status === "feedback" && g.target && (
+                <div className="rounded-xl bg-mint px-5 py-8 text-center anim-pop">
+                  {g.answeredIn !== null ? (
+                    <>
+                      <p className="inline-flex items-center gap-2 font-display font-bold text-2xl text-leaf-deep mb-2">
+                        <IconCheck className="w-7 h-7" /> Harika! Doğru ses: {g.target.say}
+                      </p>
+                      <p className="text-ink-soft font-semibold text-sm mb-3">
+                        {g.answeredIn.toFixed(1)} saniyede buldun · +{10 + (g.bonusText ? 5 : 0) + (g.bonusText && g.bonusText.includes("SERİ = EKSTRA") ? 5 : 0)} puan
+                      </p>
+                      {g.bonusText && (
+                        <p className="sticker-sm inline-flex items-center gap-2 rounded-full bg-amber px-4 py-2 font-black text-sm text-ink anim-pop">
+                          <IconBolt className="w-4 h-4" /> {g.bonusText}
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <p className="font-display font-bold text-2xl text-ink mb-2">
+                        Doğru ses <span className="text-coral-deep">{g.target.say}</span> idi
+                      </p>
+                      <p className="text-ink-soft font-semibold text-sm">Bir dahaki sefere yakalarsın!</p>
+                    </>
                   )}
-                  <p className="font-display font-bold text-3xl sm:text-4xl mb-3">{g.score} puan</p>
-                  <div className="flex gap-2 mb-3" aria-label={`${g.stars} yıldız`}>
+                  <div className="flex justify-center mt-5">
+                    <LetterTile letter={g.target} size="lg" state="correct" sub={g.target.word} />
+                  </div>
+                </div>
+              )}
+
+              {/* ---- karne ---- */}
+              {g.status === "done" && (
+                <div className="rounded-xl bg-sand px-5 py-9 text-center anim-pop">
+                  <p className="font-display font-bold text-3xl text-ink mb-3">Av Bitti!</p>
+                  <div className="flex justify-center gap-1.5 mb-4" aria-label={`${stars} yıldız`}>
                     {[0, 1, 2].map((i) => (
                       <IconStar
                         key={i}
-                        filled={i < g.stars}
-                        className={`w-10 h-10 ${i < g.stars ? "text-amber-deep anim-pop" : "text-mint-deep"}`}
+                        className={`w-10 h-10 ${i < stars ? "text-amber-deep" : "text-mint-deep"}`}
+                        filled={i < stars}
                       />
                     ))}
                   </div>
-                  <p className="font-bold text-ink-soft mb-1">
-                    10 sesin {g.correctCount} tanesini doğru avladın.
-                  </p>
-                  <p className="text-sm font-semibold text-ink-soft mb-6">
-                    Rekorun: <span className="font-black text-ink">{g.best}</span> puan
+                  {g.newRecord && (
+                    <p className="sticker-sm inline-flex items-center gap-2 rounded-full bg-amber px-4 py-2 font-black text-sm text-ink mb-4 anim-wiggle">
+                      <IconTrophy className="w-5 h-5" /> YENİ REKOR!
+                    </p>
+                  )}
+                  <p className="font-display font-bold text-5xl text-coral-deep mb-1.5">{g.score}</p>
+                  <p className="text-ink-soft font-semibold text-sm mb-6">
+                    puan topladın · {group.name} grubu rekorun: {g.record}
                   </p>
                   <div className="flex flex-wrap justify-center gap-3">
-                    <ToyButton color="bg-coral" className="text-white" onClick={g.actions.start}>
-                      <IconReplay className="w-5 h-5" /> Tekrar Oyna
-                    </ToyButton>
-                    <ToyButton color="bg-paper" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
-                      Harflere Dön
-                    </ToyButton>
+                    <button
+                      type="button"
+                      onClick={g.startGame}
+                      className="btn-toy sticker rounded-xl bg-coral text-white px-7 py-3.5 font-display font-bold text-lg inline-flex items-center gap-2.5"
+                    >
+                      <IconPlay className="w-5 h-5" /> TEKRAR OYNA
+                    </button>
+                    <a
+                      href="#harfler"
+                      className="btn-toy sticker rounded-xl bg-paper text-ink px-6 py-3.5 font-display font-bold text-lg inline-flex items-center gap-2.5"
+                    >
+                      <IconBook className="w-5 h-5" /> Sesleri İncele
+                    </a>
                   </div>
                 </div>
               )}
-            </div>
-          </div>
-        </section>
+            </section>
 
-        {/* ---------------- kelime bahçesi ---------------- */}
-        <section className="py-8">
-          <div className="sticker rounded-2xl bg-mint/80 p-5 sm:p-8">
-            <div className="flex items-center gap-3 mb-1.5">
-              <span className="w-11 h-11 rounded-xl bg-grape text-white border-[3px] border-ink flex items-center justify-center">
-                <IconBook className="w-6 h-6" />
-              </span>
-              <h2 className="font-display font-bold text-2xl">Kelime Bahçesi</h2>
-            </div>
-            <p className="text-ink-soft font-semibold mb-5">
-              Bu kelimelerin hepsi yalnızca A-N-E-T-İ-L seslerinden! Dokun, dinle, tekrar et.
-            </p>
-            <div className="flex flex-wrap gap-2.5 mb-7">
-              {WORDS.map((w) => (
-                <button
-                  key={w}
-                  type="button"
-                  onClick={() => {
-                    setSpokenWord(w);
-                    sayQuick(w);
-                  }}
-                  className={`btn-toy rounded-xl px-4 py-2 font-display font-semibold text-lg inline-flex items-center gap-2 ${
-                    spokenWord === w ? "bg-amber anim-pulse-soft" : "bg-paper"
-                  }`}
-                >
-                  {spokenWord === w && <IconSpeaker className="w-4 h-4 text-ink" />}
-                  {w}
-                </button>
-              ))}
-            </div>
-            <p className="font-black text-sm tracking-wide text-ink-soft mb-3">İLK CÜMLELERİM</p>
-            <div className="grid sm:grid-cols-3 gap-3">
-              {SENTENCES.map((s, i) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => {
-                    setSpokenSentence(i);
-                    say(s, { rate: 0.8 });
-                  }}
-                  className={`btn-toy rounded-xl p-4 text-left inline-flex items-center gap-3 ${
-                    spokenSentence === i ? "bg-sand anim-pulse-soft" : "bg-paper"
-                  }`}
-                >
-                  <span className="w-9 h-9 shrink-0 rounded-lg bg-sky text-white border-2 border-ink flex items-center justify-center">
-                    <IconSpeaker className="w-5 h-5" />
+            {/* ---------------- kelime bahçesi ---------------- */}
+            <section className="sticker rounded-2xl bg-paper p-5 sm:p-7">
+              <SectionHead
+                kicker="Oku ve Dinle"
+                title={`${group.name} Kelime Bahçesi`}
+                desc={`${group.words.length} kelime · ${group.sentences.length} örnek cümle — dokun, sesli okunsun.`}
+                right={
+                  <span className="sticker-sm rounded-full bg-leaf text-white px-3.5 py-2 text-[11px] font-black inline-flex items-center gap-1.5">
+                    <IconHand className="w-4 h-4" /> Dokun &amp; Dinle
                   </span>
-                  <span className="font-display font-semibold text-lg leading-snug">{s}</span>
-                </button>
-              ))}
-            </div>
+                }
+              />
+              <div className="flex flex-wrap gap-2.5 mb-6">
+                {group.words.map((w, i) => (
+                  <button
+                    key={w}
+                    type="button"
+                    onClick={() => say(w, { rate: 0.85 })}
+                    className="btn-toy sticker-sm rounded-full bg-mint hover:bg-amber px-4 py-2 font-display font-semibold text-ink text-sm sm:text-base transition-colors anim-pop"
+                    style={{ animationDelay: `${Math.min(i * 35, 600)}ms` }}
+                  >
+                    {w}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] font-black tracking-[0.22em] uppercase text-sky-deep mb-3">
+                İlk Cümleler
+              </p>
+              <div className="grid sm:grid-cols-2 gap-2.5">
+                {group.sentences.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => say(s, { rate: 0.82 })}
+                    className="btn-toy sticker-sm rounded-lg bg-sand hover:bg-amber px-4 py-3 flex items-center gap-3 text-left transition-colors"
+                  >
+                    <IconBook className="w-5 h-5 text-sky-deep shrink-0" />
+                    <span className="font-display font-semibold text-ink text-base">{s}</span>
+                    <IconSpeaker className="w-4 h-4 text-ink-soft ml-auto shrink-0" />
+                  </button>
+                ))}
+              </div>
+            </section>
           </div>
-        </section>
 
-        {/* ---------------- neden ANETİL + grup sırası ---------------- */}
-        <section className="py-8 grid lg:grid-cols-2 gap-6">
-          <div className="sticker rounded-2xl bg-paper p-5 sm:p-7">
-            <h2 className="font-display font-bold text-2xl mb-4">Neden ANETİL?</h2>
-            <ul className="space-y-4">
-              {[
-                {
-                  t: "İlk andan anlamlı kelime",
-                  d: "Daha ilk iki sesle “an” ve “ana” yazılır; çocuk hemen başarının tadını alır.",
-                },
-                {
-                  t: "Üçüncü seste “anne”",
-                  d: "E sesi eklenir eklenmez en sevilen kelime kurulur; motivasyon tavan yapar.",
-                },
-                {
-                  t: "Akıcı heceleme",
-                  d: "Türkçenin hece yapısına uygun sıralama, okuma hızını ve akıcılığı güçlendirir.",
-                },
-              ].map((b, i) => (
-                <li key={b.t} className="flex gap-3.5">
-                  <span className="w-9 h-9 shrink-0 rounded-lg bg-leaf text-white border-2 border-ink flex items-center justify-center mt-0.5">
-                    <IconCheck className="w-5 h-5" />
-                  </span>
-                  <div>
-                    <p className="font-display font-semibold text-lg leading-tight">
-                      <span className="text-ink-soft mr-1.5">{i + 1}.</span>
-                      {b.t}
-                    </p>
-                    <p className="text-sm font-semibold text-ink-soft mt-0.5">{b.d}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-            <div className="mt-5 flex items-start gap-2.5 rounded-xl bg-mint border-2 border-ink/15 p-3.5">
-              <IconSparkle className="w-5 h-5 text-amber-deep shrink-0 mt-0.5" />
-              <p className="text-sm font-semibold text-ink-soft">
-                Uzun yıllar kullanılan ELAKİN sıralamasının yerini 2024-25'te bu yeni düzen aldı.
+          {/* ---------------- yan panel ---------------- */}
+          <aside className="flex flex-col gap-6">
+            {/* nasıl oynanır */}
+            <div className="sticker rounded-2xl bg-paper p-5">
+              <h3 className="font-display font-bold text-xl text-ink mb-4 flex items-center gap-2.5">
+                <IconBrain className="w-6 h-6 text-grape-deep" /> Nasıl Oynanır?
+              </h3>
+              <ol className="space-y-3.5">
+                {[
+                  { ic: <IconSpeaker className="w-5 h-5" />, c: "bg-coral text-white", t: "Bilgisayar bir ses söyler: “Bu sesi iyi dinle…”" },
+                  { ic: <IconBrain className="w-5 h-5" />, c: "bg-amber text-ink", t: "5 saniye boyunca sesi aklında tutarsın." },
+                  { ic: <IconEar className="w-5 h-5" />, c: "bg-leaf text-white", t: "Sesi yüksek sesle söyler, doğru harfe dokunursun." },
+                  { ic: <IconStar className="w-5 h-5" filled />, c: "bg-sky text-white", t: "Doğru cevap puan, hız ve seri ekstra puan kazandırır." },
+                ].map((s, i) => (
+                  <li key={i} className="flex items-start gap-3">
+                    <span className={`sticker-sm w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${s.c}`}>
+                      {s.ic}
+                    </span>
+                    <p className="text-sm font-semibold text-ink leading-snug pt-1.5">{s.t}</p>
+                  </li>
+                ))}
+              </ol>
+            </div>
+
+            {/* ses grupları sıralaması */}
+            <div className="sticker rounded-2xl bg-paper p-5">
+              <h3 className="font-display font-bold text-xl text-ink mb-1">Ses Grupları</h3>
+              <p className="text-[11px] font-bold text-ink-soft mb-4">29 ses · 5 grup sırasıyla öğretilir</p>
+              <ol className="space-y-2">
+                {GROUPS.map((gr, i) => {
+                  const active = i === gIdx;
+                  return (
+                    <li key={gr.id}>
+                      <button
+                        type="button"
+                        onClick={() => setGIdx(i)}
+                        className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors border-2 ${
+                          active ? "bg-mint border-leaf" : "border-transparent hover:bg-mint/60"
+                        }`}
+                      >
+                        <span
+                          className={`sticker-sm w-8 h-8 rounded-md font-display font-bold text-sm flex items-center justify-center shrink-0 ${
+                            active ? "bg-ink text-amber" : "bg-mint-deep text-ink"
+                          }`}
+                        >
+                          {gr.no}
+                        </span>
+                        <span className="min-w-0">
+                          <span className={`block font-display font-bold text-base leading-tight ${active ? "text-leaf-deep" : "text-ink"}`}>
+                            {gr.name}
+                          </span>
+                          <span className="block text-[11px] font-bold text-ink-soft truncate">
+                            {gr.letters.map((l) => l.char).join(" · ")}
+                          </span>
+                        </span>
+                        {active && (
+                          <span className="ml-auto text-[9px] font-black tracking-widest text-leaf-deep uppercase shrink-0">
+                            Açık
+                          </span>
+                        )}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+            </div>
+
+            {/* ipucu */}
+            <div className="sticker rounded-2xl bg-amber p-5 -rotate-1">
+              <h3 className="font-display font-bold text-lg text-ink mb-2 flex items-center gap-2">
+                <IconSparkle className="w-5 h-5" /> Öğretmen İpucu
+              </h3>
+              <p className="text-sm font-semibold text-ink leading-relaxed">
+                Her grup bitmeden diğerine geçmeyin. Çocuğa sesi önce siz söyleyin, sonra oyundaki
+                “Sesi Tekrar Dinle” düğmesiyle pekiştirin; kelime bahçesindeki kelimeleri birlikte
+                okuyun.
               </p>
             </div>
-          </div>
+          </aside>
+        </main>
 
-          <div className="sticker rounded-2xl bg-sand p-5 sm:p-7">
-            <h2 className="font-display font-bold text-2xl mb-4">Ses Grupları Sıralaması</h2>
-            <ol className="space-y-3">
-              {GROUPS.map((grp, i) => {
-                const active = i === 0;
-                return (
-                  <li
-                    key={grp}
-                    className={`flex items-center gap-3.5 rounded-xl border-[3px] border-ink p-3 ${
-                      active ? "bg-amber" : "bg-paper"
-                    }`}
-                  >
-                    <span
-                      className={`w-10 h-10 shrink-0 rounded-lg border-[3px] border-ink font-display font-bold text-lg flex items-center justify-center ${
-                        active ? "bg-ink text-amber" : "bg-mint"
-                      }`}
-                    >
-                      {i + 1}
-                    </span>
-                    <span className="font-display font-bold text-xl tracking-[0.14em]">
-                      {grp.split("").map((c, j) => (
-                        <span key={j} className="mr-1">
-                          {c}
-                        </span>
-                      ))}
-                    </span>
-                    {active && (
-                      <span className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-paper border-2 border-ink px-2.5 py-1 text-xs font-black">
-                        <IconStar className="w-3.5 h-3.5 text-amber-deep" filled /> buradasın
-                      </span>
-                    )}
-                  </li>
-                );
-              })}
-            </ol>
-          </div>
-        </section>
-      </main>
-
-      {/* ---------------- alt bilgi ---------------- */}
-      <footer className="relative z-10 mt-6">
-        <svg viewBox="0 0 1440 70" className="w-full block text-ink" aria-hidden preserveAspectRatio="none">
-          <path
-            d="M0,40 C240,75 480,5 720,35 C960,65 1200,10 1440,40 L1440,70 L0,70 Z"
-            fill="currentColor"
-            opacity="0.9"
-          />
-        </svg>
-        <div className="bg-ink text-mint py-8">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm font-semibold">
-            <p>
-              <span className="font-display font-bold text-amber">ANETİL Ses Avı</span> · MEB Türkiye
-              Yüzyılı Maarif Modeli, 1. sınıf ilk okuma-yazma 1. ses grubu
-            </p>
-            <p className="text-mint/70">Sesler, tarayıcının Türkçe ses motoruyla okunur · Skor bu cihazda saklanır</p>
-          </div>
-        </div>
-      </footer>
+        <footer className="mt-12 pt-5 border-t-3 border-dashed border-mint-deep flex flex-wrap items-center justify-between gap-2 text-[11px] font-bold text-ink-soft">
+          <p>
+            <span className="text-coral-deep font-black">SES AVI</span> · 1. sınıf ilk okuma-yazma ·
+            Maarif Modeli 2026-2027
+          </p>
+          <p>Sesler tarayıcının Türkçe ses motoruyla okunur · Rekor bu cihazda saklanır</p>
+        </footer>
+      </div>
     </div>
   );
 }

@@ -1,271 +1,285 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { LETTERS, shuffle, type LetterDef } from "./letters";
-import { cancelSpeech, say } from "./speech";
-
-export type Phase = "idle" | "listen" | "wait" | "answer" | "reveal" | "done";
-
-export interface Feedback {
-  kind: "correct" | "wrong" | "timeout";
-  gained: number;
-  speedBonus: boolean;
-  streakBonus: boolean;
-  praise: string;
-}
+import type { GroupDef, LetterDef } from "./letters";
+import { shuffle } from "./letters";
+import { cancelSpeech, isSpeechSupported, say, setMuted as setSpeechMuted } from "./speech";
 
 export const TOTAL_ROUNDS = 10;
-export const WAIT_SECONDS = 5;
-export const ANSWER_LIMIT_MS = 8000;
-const SPEED_BONUS_MS = 3000;
+export const REMEMBER_SECONDS = 5;
 
-const PRAISES = ["Süper!", "Harika!", "Çok iyi!", "Bravo!", "Muhteşem!"];
+export type GameStatus = "start" | "playing" | "remember" | "answer" | "feedback" | "done";
 
-const BEST_KEY = "anetil.best.v1";
-
-function loadBest(): number {
-  try {
-    return Number(localStorage.getItem(BEST_KEY)) || 0;
-  } catch {
-    return 0;
-  }
+export interface RunState {
+  status: GameStatus;
+  score: number;
+  streak: number;
+  bestStreak: number;
+  round: number;
+  target: LetterDef | null;
+  tiles: LetterDef[];
+  rememberLeft: number;
+  bonusText: string | null;
+  correctId: string | null;
+  wrongId: string | null;
+  answeredIn: number | null;
+  lastWord: string | null;
+  newRecord: boolean;
+  speechOk: boolean;
 }
 
-function saveBest(v: number) {
-  try {
-    localStorage.setItem(BEST_KEY, String(v));
-  } catch {
-    /* sessizce geç */
-  }
-}
+const initialRun = (speechOk: boolean): RunState => ({
+  status: "start",
+  score: 0,
+  streak: 0,
+  bestStreak: 0,
+  round: 0,
+  target: null,
+  tiles: [],
+  rememberLeft: 0,
+  bonusText: null,
+  correctId: null,
+  wrongId: null,
+  answeredIn: null,
+  lastWord: null,
+  newRecord: false,
+  speechOk,
+});
 
-export function useSoundGame() {
-  const [phase, setPhaseState] = useState<Phase>("idle");
-  const [round, setRound] = useState(0); // 0 tabanlı, ekranda +1
-  const [target, setTarget] = useState<LetterDef>(LETTERS[0]);
-  const [options, setOptions] = useState<LetterDef[]>(LETTERS);
-  const [picked, setPicked] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<Feedback | null>(null);
-  const [score, setScore] = useState(0);
-  const [streak, setStreak] = useState(0);
-  const [results, setResults] = useState<("ok" | "no" | null)[]>(Array(TOTAL_ROUNDS).fill(null));
-  const [best, setBest] = useState<number>(loadBest);
-  const [newBest, setNewBest] = useState(false);
-  const [waitRemaining, setWaitRemaining] = useState(WAIT_SECONDS);
-  const [saidNow, setSaidNow] = useState(0); // hoparlör animasyonu tetikleyicisi
+export function useSoundGame(group: GroupDef) {
+  const [run, setRun] = useState<RunState>(() => initialRun(isSpeechSupported()));
+  const [record, setRecord] = useState(0);
+  const [muted, setMutedState] = useState(false);
 
-  const phaseRef = useRef<Phase>("idle");
-  const timersRef = useRef<number[]>([]);
-  const intervalRef = useRef<number | null>(null);
-  const targetRef = useRef<LetterDef>(LETTERS[0]);
-  const streakRef = useRef(0);
-  const scoreRef = useRef(0);
-  const answerStartRef = useRef(0);
-  const roundRef = useRef(0);
-  const lastTargetRef = useRef<string | null>(null);
+  const timers = useRef<number[]>([]);
+  const runRef = useRef(run);
+  runRef.current = run;
+  const seqRef = useRef<LetterDef[]>([]);
 
-  const setPhase = useCallback((p: Phase) => {
-    phaseRef.current = p;
-    setPhaseState(p);
-  }, []);
+  const recordKey = `ses-avi-rekor-${group.id}`;
+  const recordRef = useRef(record);
+  recordRef.current = record;
 
-  const after = useCallback((ms: number, fn: () => void) => {
+  /* ---- yardımcılar ---- */
+  const later = useCallback((fn: () => void, ms: number) => {
     const id = window.setTimeout(fn, ms);
-    timersRef.current.push(id);
-    return id;
+    timers.current.push(id);
   }, []);
 
   const clearTimers = useCallback(() => {
-    timersRef.current.forEach((id) => window.clearTimeout(id));
-    timersRef.current = [];
-    if (intervalRef.current !== null) {
-      window.clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
+    timers.current.forEach((id) => {
+      window.clearTimeout(id);
+      window.clearInterval(id);
+    });
+    timers.current = [];
   }, []);
 
-  useEffect(() => {
-    return () => {
-      clearTimers();
-      cancelSpeech();
-    };
-  }, [clearTimers]);
-
-  /* ---------------- akış ---------------- */
-
-  const startWait = useCallback(() => {
-    setPhase("wait");
-    setWaitRemaining(WAIT_SECONDS);
-    const startedAt = Date.now();
-    intervalRef.current = window.setInterval(() => {
-      const left = WAIT_SECONDS - (Date.now() - startedAt) / 1000;
-      if (left <= 0) {
-        if (intervalRef.current !== null) window.clearInterval(intervalRef.current);
-        intervalRef.current = null;
-        setWaitRemaining(0);
-        startAnswer();
-      } else {
-        setWaitRemaining(left);
-      }
-    }, 100);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setPhase]);
-
-  const startAnswer = useCallback(() => {
-    setPhase("answer");
-    answerStartRef.current = Date.now();
-    after(ANSWER_LIMIT_MS, () => {
-      if (phaseRef.current === "answer") resolve(null);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setPhase, after]);
-
-  const resolve = useCallback(
-    (pickId: string | null) => {
-      if (phaseRef.current !== "answer") return;
-      clearTimers();
-      const t = targetRef.current;
-      const correct = pickId !== null && pickId === t.id;
-      const answerMs = Date.now() - answerStartRef.current;
-
-      let gained = 0;
-      let speedBonus = false;
-      let streakBonus = false;
-
-      if (correct) {
-        gained = 10;
-        speedBonus = answerMs <= SPEED_BONUS_MS;
-        if (speedBonus) gained += 5;
-        streakRef.current += 1;
-        if (streakRef.current >= 3) {
-          streakBonus = true;
-          gained += 5;
-        }
-      } else {
-        streakRef.current = 0;
-      }
-      setStreak(streakRef.current);
-      scoreRef.current += gained;
-      setScore(scoreRef.current);
-      setPicked(pickId);
-      setResults((prev) => {
-        const next = [...prev];
-        next[roundRef.current] = correct ? "ok" : "no";
-        return next;
-      });
-
-      const kind: Feedback["kind"] = correct ? "correct" : pickId === null ? "timeout" : "wrong";
-      setFeedback({
-        kind,
-        gained,
-        speedBonus,
-        streakBonus,
-        praise: PRAISES[Math.floor(Math.random() * PRAISES.length)],
-      });
-      setPhase("reveal");
-
-      // "sesi söyle" — doğru ses her turda mutlaka okunur
-      say(t.say, { rate: 0.78 });
-
-      after(2300, () => {
-        const nextRound = roundRef.current + 1;
-        if (nextRound >= TOTAL_ROUNDS) {
-          finishRun();
-        } else {
-          roundRef.current = nextRound;
-          setRound(nextRound);
-          beginRound();
-        }
-      });
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [after, clearTimers, setPhase],
-  );
-
-  const beginRound = useCallback(() => {
-    clearTimers();
-    setFeedback(null);
-    setPicked(null);
-
-    let t = LETTERS[Math.floor(Math.random() * LETTERS.length)];
-    if (LETTERS.length > 1 && t.id === lastTargetRef.current) {
-      t = LETTERS[(LETTERS.indexOf(t) + 1 + Math.floor(Math.random() * (LETTERS.length - 1))) % LETTERS.length];
-    }
-    lastTargetRef.current = t.id;
-    targetRef.current = t;
-    setTarget(t);
-    setOptions(shuffle(LETTERS));
-    setPhase("listen");
-    setSaidNow((n) => n + 1);
-
-    after(500, () => {
-      if (phaseRef.current !== "listen") return;
-      say(t.say, { onEnd: () => after(350, () => phaseRef.current === "listen" && startWait()) });
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [after, clearTimers, setPhase, startWait]);
-
-  const finishRun = useCallback(() => {
-    setPhase("done");
-    setBest((prev) => {
-      const final = scoreRef.current;
-      if (final > prev) {
-        saveBest(final);
-        setNewBest(true);
-        return final;
-      }
-      setNewBest(false);
-      return prev;
-    });
-  }, [setPhase]);
-
-  const start = useCallback(() => {
+  const stopGame = useCallback(() => {
     clearTimers();
     cancelSpeech();
-    scoreRef.current = 0;
-    streakRef.current = 0;
-    roundRef.current = 0;
-    lastTargetRef.current = null;
-    setScore(0);
-    setStreak(0);
-    setRound(0);
-    setResults(Array(TOTAL_ROUNDS).fill(null));
-    setNewBest(false);
-    beginRound();
-  }, [beginRound, clearTimers]);
+    seqRef.current = [];
+    setRun((r) => initialRun(r.speechOk));
+  }, [clearTimers]);
 
-  const pick = useCallback(
-    (id: string) => {
-      if (phaseRef.current !== "answer") return;
-      resolve(id);
+  /* ---- grup değişince skoru yükle, süren oyunu durdur ---- */
+  useEffect(() => {
+    const v = Number(localStorage.getItem(recordKey) ?? 0);
+    setRecord(Number.isFinite(v) ? v : 0);
+  }, [recordKey]);
+
+  const prevGroup = useRef(group.id);
+  useEffect(() => {
+    if (prevGroup.current !== group.id) {
+      prevGroup.current = group.id;
+      stopGame();
+    }
+  }, [group.id, stopGame]);
+
+  useEffect(
+    () => () => {
+      clearTimers();
+      cancelSpeech();
     },
-    [resolve],
+    [clearTimers],
   );
 
-  const replay = useCallback(() => {
-    const p = phaseRef.current;
-    if (p !== "wait" && p !== "answer" && p !== "reveal") return;
-    setSaidNow((n) => n + 1);
-    say(targetRef.current.say, { rate: 0.78 });
+  /* ---- tur akışı ---- */
+  const playRound = useCallback(
+    (n: number, tiles: LetterDef[]) => {
+      const target = seqRef.current[n - 1];
+      if (!target) return;
+      setRun((r) => ({
+        ...r,
+        status: "playing",
+        round: n,
+        target,
+        tiles: shuffle(tiles),
+        correctId: null,
+        wrongId: null,
+        bonusText: null,
+        answeredIn: null,
+      }));
+      say(`Sıra ${n}. seste. Bu sesi iyi dinle: ${target.say}`, {
+        rate: 0.86,
+        onEnd: () => {
+          const r = runRef.current;
+          if (r.status !== "playing" || r.round !== n) return;
+          setRun((cur) => ({ ...cur, status: "remember", rememberLeft: REMEMBER_SECONDS }));
+          const tick = window.setInterval(() => {
+            setRun((cur) => {
+              if (cur.status !== "remember") return cur;
+              const left = Math.round((cur.rememberLeft - 0.1) * 10) / 10;
+              if (left <= 0) {
+                window.clearInterval(tick);
+                return { ...cur, status: "answer", rememberLeft: 0 };
+              }
+              return { ...cur, rememberLeft: left };
+            });
+          }, 100);
+          timers.current.push(tick as unknown as number);
+        },
+      });
+    },
+    [],
+  );
+
+  const advanceRound = useCallback(() => {
+    const cur = runRef.current;
+    if (cur.status !== "feedback") return;
+    if (cur.round >= TOTAL_ROUNDS) {
+      let newRecord = false;
+      if (cur.score > recordRef.current) {
+        newRecord = true;
+        localStorage.setItem(recordKey, String(cur.score));
+        setRecord(cur.score);
+      }
+      setRun((x) => ({ ...x, status: "done", newRecord }));
+    } else {
+      playRound(cur.round + 1, cur.tiles);
+    }
+  }, [playRound, recordKey]);
+
+  const startGame = useCallback(() => {
+    clearTimers();
+    cancelSpeech();
+    const letters = group.letters;
+    seqRef.current = Array.from(
+      { length: TOTAL_ROUNDS },
+      () => letters[Math.floor(Math.random() * letters.length)],
+    );
+    setRun({ ...initialRun(isSpeechSupported()), status: "playing", tiles: shuffle(letters) });
+    later(() => playRound(1, letters), 400);
+  }, [group, clearTimers, later, playRound]);
+
+  /* ---- cevap verme ---- */
+  const pick = useCallback(
+    (letter: LetterDef, el?: HTMLElement) => {
+      const r = runRef.current;
+      if (r.status !== "answer" || !r.target) return;
+
+      if (letter.id === r.target.id) {
+        const fast = r.rememberLeft >= REMEMBER_SECONDS - 3;
+        const hot = r.streak >= 3;
+        const gained = 10 + (fast ? 5 : 0) + (hot ? 5 : 0);
+        const bonusText =
+          fast && hot
+            ? "HIZLI + SERİ = EKSTRA PUAN!"
+            : fast
+              ? "HIZLI KULAK! EKSTRA +5"
+              : hot
+                ? "SERİ BONUSU! EKSTRA +5"
+                : null;
+        if (el) {
+          const b = el.getBoundingClientRect();
+          el.dispatchEvent(
+            new CustomEvent("ses-avi-burst", {
+              bubbles: true,
+              detail: { x: b.left + b.width / 2, y: b.top + b.height / 2 },
+            }),
+          );
+        }
+        say(`${letter.say} sesi, ${letter.char} harfi. Dinle ve tekrar et: ${letter.say}!`, {
+          rate: 0.85,
+        });
+        setRun((cur) => ({
+          ...cur,
+          status: "feedback",
+          correctId: letter.id,
+          score: cur.score + gained,
+          streak: cur.streak + 1,
+          bestStreak: Math.max(cur.bestStreak, cur.streak + 1),
+          bonusText,
+          answeredIn: Math.round((REMEMBER_SECONDS - cur.rememberLeft) * 10) / 10,
+        }));
+        later(() => advanceRound(), 2600);
+      } else {
+        say("Olmadı, tekrar dene!", { rate: 0.92 });
+        setRun((cur) => ({ ...cur, wrongId: letter.id, streak: 0, bonusText: null }));
+        later(
+          () => setRun((cur) => (cur.wrongId === letter.id ? { ...cur, wrongId: null } : cur)),
+          500,
+        );
+      }
+    },
+    [later, advanceRound],
+  );
+
+  /* ---- süre dolunca doğru sesi göster ---- */
+  const reveal = useCallback(() => {
+    const r = runRef.current;
+    if (r.status !== "answer" || !r.target) return;
+    cancelSpeech();
+    say(`Süre doldu! Doğru ses ${r.target.say} idi. Dinle: ${r.target.say}`, { rate: 0.85 });
+    setRun((cur) => ({
+      ...cur,
+      status: "feedback",
+      correctId: r.target!.id,
+      streak: 0,
+      bonusText: null,
+    }));
+    later(() => advanceRound(), 3200);
+  }, [later, advanceRound]);
+
+  const replaySound = useCallback(() => {
+    const r = runRef.current;
+    if (r.target) say(r.target.say, { rate: 0.8 });
   }, []);
 
-  const correctCount = results.filter((r) => r === "ok").length;
-  const stars = score >= 130 ? 3 : score >= 80 ? 2 : score >= 40 ? 1 : 0;
+  /* ---- klavye ---- */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const r = runRef.current;
+      if (e.code === "Space") {
+        e.preventDefault();
+        if (r.status === "start" || r.status === "done") startGame();
+        return;
+      }
+      if (r.status === "answer") {
+        const n = Number(e.key);
+        if (n >= 1 && n <= r.tiles.length) pick(r.tiles[n - 1]);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [startGame, pick]);
+
+  /* ---- ses ---- */
+  const toggleMute = useCallback(() => {
+    setMutedState((m) => {
+      const next = !m;
+      setSpeechMuted(next);
+      if (next) cancelSpeech();
+      return next;
+    });
+  }, []);
 
   return {
-    phase,
-    round,
-    target,
-    options,
-    picked,
-    feedback,
-    score,
-    streak,
-    results,
-    best,
-    newBest,
-    waitRemaining,
-    saidNow,
-    correctCount,
-    stars,
-    actions: { start, pick, replay },
+    ...run,
+    record,
+    muted,
+    startGame,
+    stopGame,
+    pick,
+    reveal,
+    replaySound,
+    toggleMute,
   };
 }
