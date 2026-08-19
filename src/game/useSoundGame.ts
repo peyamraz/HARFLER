@@ -119,6 +119,7 @@ export function useSoundGame(group: GroupDef) {
       bonusText: null,
       answeredIn: null,
     }));
+    sfx.listen();
     say(`Sıra ${n}. seste. Kulaklar hazır mı? Dinle: ${target.say}`, {
       rate: 0.82,
       onEnd: () => {
@@ -224,7 +225,7 @@ export function useSoundGame(group: GroupDef) {
           bonusText,
           answeredIn: Math.round((REMEMBER_SECONDS - cur.rememberLeft) * 10) / 10,
         }));
-        later(() => advanceRound(), 2600);
+        later(() => advanceRound(), 3400);
       } else {
         sfx.wrong();
         say("Olmadı, tekrar dene!", { rate: 0.92 });

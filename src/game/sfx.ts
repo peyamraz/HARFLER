@@ -85,6 +85,11 @@ export const sfx = {
     tone(988, 0.08, { type: "sine", vol: 0.12 });
     tone(1319, 0.12, { type: "sine", vol: 0.12, when: 0.07 });
   },
+  /** "dinle" işareti — konuşma başlamadan önce net zil */
+  listen() {
+    tone(740, 0.09, { type: "sine", vol: 0.16 });
+    tone(1108, 0.14, { type: "sine", vol: 0.14, when: 0.1 });
+  },
   /** bitiş fanfarı */
   win() {
     tone(523.25, 0.14, { type: "triangle", vol: 0.18 });

@@ -238,6 +238,20 @@ body {
   animation: blink-soft 1.1s ease-in-out infinite;
 }
 
+@keyframes wave {
+  0%,
+  100% {
+    height: 30%;
+  }
+  50% {
+    height: 100%;
+  }
+}
+.wave-bar {
+  height: 30%;
+  animation: wave 0.9s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .anim-floaty,
   .anim-hero,

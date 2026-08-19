@@ -2,9 +2,12 @@
 
 let trVoice: SpeechSynthesisVoice | null = null;
 let muted = false;
+let speakTimer: number | null = null;
 
 const supported =
-  typeof window !== "undefined" && "speechSynthesis" in window && typeof SpeechSynthesisUtterance !== "undefined";
+  typeof window !== "undefined" &&
+  "speechSynthesis" in window &&
+  typeof SpeechSynthesisUtterance !== "undefined";
 
 function pickVoice() {
   if (!supported) return;
@@ -19,6 +22,10 @@ function pickVoice() {
 if (supported) {
   pickVoice();
   window.speechSynthesis.onvoiceschanged = pickVoice;
+  // Chrome uzun konuşmaları gizlice duraklatabilir; düzenli devam ettir.
+  window.setInterval(() => {
+    if (!muted && window.speechSynthesis.speaking) window.speechSynthesis.resume();
+  }, 3500);
 }
 
 export function isSpeechSupported(): boolean {
@@ -31,12 +38,19 @@ export function setMuted(m: boolean) {
 }
 
 export function cancelSpeech() {
-  if (supported) window.speechSynthesis.cancel();
+  if (!supported) return;
+  if (speakTimer !== null) {
+    window.clearTimeout(speakTimer);
+    speakTimer = null;
+  }
+  window.speechSynthesis.cancel();
 }
 
 /**
- * Metni sesli okur. Ses kapalıysa/desteklenmiyorsa bile akışın aksamaması
- * için onEnd tahmini bir süre sonra mutlaka çağrılır.
+ * Metni sesli okur.
+ * - cancel() sonrası speak() Chrome'da sessizce yutulabildiği için
+ *   konuşma küçük bir gecikmeyle başlatılır.
+ * - TTS yoksa/sessizse bile akış aksamaz: onEnd tahmini sürede çağrılır.
  */
 export function say(
   text: string,
@@ -44,7 +58,7 @@ export function say(
 ): void {
   const { rate = 0.82, pitch = 1.12, onEnd } = opts ?? {};
   if (!supported || muted) {
-    if (onEnd) window.setTimeout(onEnd, Math.min(700, 260 + text.length * 40));
+    if (onEnd) window.setTimeout(onEnd, Math.min(750, 280 + text.length * 40));
     return;
   }
 
@@ -60,13 +74,22 @@ export function say(
   if (trVoice) u.voice = trVoice;
   u.rate = rate;
   u.pitch = pitch;
+  u.volume = 1;
   u.onend = finish;
   u.onerror = finish;
-  // güvenlik: bazı tarayıcılarda onend gecikebiliyor
-  window.setTimeout(finish, 1600 + text.length * 110);
+  // güvenlik: bazı tarayıcılarda onend hiç/geç gelebiliyor
+  window.setTimeout(finish, 1800 + text.length * 120);
 
+  if (speakTimer !== null) window.clearTimeout(speakTimer);
   window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(u);
+  speakTimer = window.setTimeout(() => {
+    speakTimer = null;
+    try {
+      window.speechSynthesis.speak(u);
+    } catch {
+      finish();
+    }
+  }, 90);
 }
 
 /** Kelime/cümleleri oyun temposuna göre biraz daha hızlı okur. */

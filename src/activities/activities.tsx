@@ -1,4 +1,4 @@
-import { useEffect, useState, type FC, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FC, type ReactNode } from "react";
 import type { GroupDef, LetterDef } from "../game/letters";
 import { LETTER_BY_CHAR, shuffle, trUpper } from "../game/letters";
 import { say } from "../game/speech";
@@ -30,6 +30,7 @@ import {
   syllableCount,
   useEngine,
   wordOptions,
+  wordsForAnswer,
   type ActivityProps,
   type ActivityResult,
 } from "./shared";
@@ -49,6 +50,8 @@ function OrderRace({ group, onExit, onComplete }: ActivityProps) {
     setPlaced(0);
     setWrongId(null);
     eng.arm();
+    sfx.listen();
+    say("Harflere öğrenme sırasıyla dokun.", { rate: 0.85 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eng.round, eng.runId, group]);
 
@@ -126,6 +129,7 @@ function WordHunt({ group, onExit, onComplete }: ActivityProps) {
     const word = pick(group.words);
     setQ({ word, opts: wordOptions(group.words, word, 4) });
     setChosen(null);
+    sfx.listen();
     say(word, { rate: 0.75 });
     eng.arm();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -134,8 +138,13 @@ function WordHunt({ group, onExit, onComplete }: ActivityProps) {
   const tap = (w: string) => {
     if (!q || chosen || eng.feedback || eng.done) return;
     setChosen(w);
-    if (w === q.word) eng.settle(true, `Bravo! Kelime "${q.word}".`, "");
-    else eng.settle(false, "", `Duyduğun kelime "${q.word}" idi.`);
+    if (w === q.word) {
+      say(q.word, { rate: 0.8 });
+      eng.settle(true, `Bravo! Kelime "${q.word}".`, "");
+    } else {
+      say(q.word, { rate: 0.8 });
+      eng.settle(false, "", `Duyduğun kelime "${q.word}" idi.`);
+    }
   };
 
   const stateOf = (w: string) => {
@@ -178,10 +187,12 @@ function InitialSound({ group, onExit, onComplete }: ActivityProps) {
   const [chosen, setChosen] = useState<string | null>(null);
 
   useEffect(() => {
-    const word = pick(group.words);
+    const pool = wordsForAnswer(group, (w) => LETTER_BY_CHAR[trUpper(w[0])]);
+    const word = pick(pool);
     const answer = LETTER_BY_CHAR[trUpper(word[0])];
     setQ({ word, answer, opts: ensureOpts(group, answer, 6) });
     setChosen(null);
+    sfx.listen();
     say(word, { rate: 0.75 });
     eng.arm();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -191,6 +202,7 @@ function InitialSound({ group, onExit, onComplete }: ActivityProps) {
     if (!q || chosen || eng.feedback || eng.done) return;
     setChosen(l.id);
     if (l.id === q.answer.id) {
+      sfx.correct();
       say(`${q.word}. ${q.word}, ${l.say} sesiyle başlar.`, { rate: 0.85 });
       eng.settle(true, `Evet! "${q.word}", ${l.char} ile başlar.`, "");
     } else {
@@ -246,10 +258,12 @@ function FinalSound({ group, onExit, onComplete }: ActivityProps) {
   const [chosen, setChosen] = useState<string | null>(null);
 
   useEffect(() => {
-    const word = pick(group.words);
+    const pool = wordsForAnswer(group, (w) => LETTER_BY_CHAR[trUpper(w[w.length - 1])]);
+    const word = pick(pool);
     const answer = LETTER_BY_CHAR[trUpper(word[word.length - 1])];
     setQ({ word, answer, opts: ensureOpts(group, answer, 6) });
     setChosen(null);
+    sfx.listen();
     say(word, { rate: 0.75 });
     eng.arm();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -259,6 +273,7 @@ function FinalSound({ group, onExit, onComplete }: ActivityProps) {
     if (!q || chosen || eng.feedback || eng.done) return;
     setChosen(l.id);
     if (l.id === q.answer.id) {
+      sfx.correct();
       say(`${q.word}. ${q.word}, ${l.say} sesiyle biter.`, { rate: 0.85 });
       eng.settle(true, `Evet! "${q.word}", ${l.char} ile biter.`, "");
     } else {
@@ -321,7 +336,10 @@ function RealOrNot({ group, onExit, onComplete }: ActivityProps) {
   }, [eng.round, eng.runId, group]);
 
   useEffect(() => {
-    if (q) say(q.s, { rate: 0.75 });
+    if (q) {
+      sfx.listen();
+      say(q.s, { rate: 0.75 });
+    }
   }, [q]);
 
   const tap = (guess: boolean) => {
@@ -397,9 +415,10 @@ function SyllableCountAct({ group, onExit, onComplete }: ActivityProps) {
   useEffect(() => {
     const word = pick(group.words);
     const n = syllableCount(word);
-    const opts = Array.from(new Set([n - 1, n, n + 1].filter((x) => x >= 1 && x <= 4)));
+    const opts = Array.from(new Set([n - 1, n, n + 1].filter((x) => x >= 1)));
     setQ({ word, n, opts });
     setChosen(null);
+    sfx.listen();
     say(word, { rate: 0.7 });
     eng.arm();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -455,9 +474,10 @@ function LetterCountAct({ group, onExit, onComplete }: ActivityProps) {
   useEffect(() => {
     const word = pick(group.words);
     const n = word.length;
-    const opts = Array.from(new Set([n - 1, n, n + 1].filter((x) => x >= 2 && x <= 8)));
+    const opts = Array.from(new Set([n - 1, n, n + 1].filter((x) => x >= 2)));
     setQ({ word, opts });
     setChosen(null);
+    sfx.listen();
     say(word, { rate: 0.75 });
     eng.arm();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -522,7 +542,8 @@ function GridHunt({ group, onExit, onComplete }: ActivityProps) {
     setQ({ target, cells: shuffle(cells), total });
     setFound([]);
     setWrongCell(null);
-    say(`Izgaradaki bütün ${target.say} seslerini bul!`, { rate: 0.85 });
+    sfx.listen();
+    say(`Izgaradaki bütün ${target.char} harflerini bul!`, { rate: 0.85 });
     eng.arm();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eng.round, eng.runId, group]);
@@ -553,7 +574,7 @@ function GridHunt({ group, onExit, onComplete }: ActivityProps) {
       intro={
         <div className="flex items-center justify-center gap-3 flex-wrap">
           <p className="font-display font-bold text-ink">Hedef harfin hepsini bul, hiçbirini kaçırma!</p>
-          {q && <ReplayButton text={`${q.target.say} harfini bul`} label="Görevi dinle" />}
+          {q && <ReplayButton text={`${q.target.char} harflerini bul`} label="Görevi dinle" />}
         </div>
       }
     >
@@ -607,7 +628,8 @@ function SpellWordAct({ group, onExit, onComplete }: ActivityProps) {
     setQ({ word, chips });
     setUsed([]);
     setWrongIdx(null);
-    say(`${word} kelimesini harf harf diz.`, { rate: 0.85 });
+    sfx.listen();
+    say(word, { rate: 0.75 });
     eng.arm();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eng.round, eng.runId, group]);
@@ -696,11 +718,22 @@ function FillLetterAct({ group, onExit, onComplete }: ActivityProps) {
 
   useEffect(() => {
     const words = group.words.filter((w) => w.length >= 3);
-    const word = pick(words.length ? words : group.words);
-    const idx = Math.floor(Math.random() * word.length);
+    const base = words.length ? words : group.words;
+    // eksik harf, çocuğun öğrendiği gruptan olsun
+    const ids = new Set(group.letters.map((l) => l.id));
+    const ok = base.filter((w) => w.split("").some((c) => ids.has(trUpper(c))));
+    const word = pick(ok.length ? ok : base);
+    const inGroupIdx = word
+      .split("")
+      .map((c, i) => ({ c, i }))
+      .filter((x) => ids.has(trUpper(x.c)));
+    const idx = inGroupIdx.length
+      ? inGroupIdx[Math.floor(Math.random() * inGroupIdx.length)].i
+      : Math.floor(Math.random() * word.length);
     const answer = LETTER_BY_CHAR[trUpper(word[idx])];
     setQ({ word, idx, answer, opts: ensureOpts(group, answer, 3) });
     setChosen(null);
+    sfx.listen();
     say(word, { rate: 0.72 });
     eng.arm();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -732,7 +765,7 @@ function FillLetterAct({ group, onExit, onComplete }: ActivityProps) {
       }
     >
       <div className="mb-7">
-        <BigWord text={q?.word ?? ""} highlight={chosen ? undefined : q?.idx} />
+        <BigWord text={q?.word ?? ""} highlight={chosen ? undefined : q?.idx} blank />
       </div>
       <div className="flex items-center justify-center gap-3 flex-wrap">
         {q?.opts.map((l) => (
@@ -773,6 +806,7 @@ function SentenceWordAct({ group, onExit, onComplete }: ActivityProps) {
     const pool = group.words.filter((w) => w !== target && !inWords.includes(w));
     setQ({ sentence, target, opts: shuffle([target, ...sample(pool, 3)]) });
     setChosen(null);
+    sfx.listen();
     say(sentence, { rate: 0.8 });
     eng.arm();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -836,6 +870,9 @@ function MemoryMatchAct({ group, onExit, onComplete }: ActivityProps) {
   const [flipped, setFlipped] = useState<number[]>([]);
   const [matched, setMatched] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const matchedRef = useRef(0);
+  const cardsRef = useRef<MemCard[]>([]);
+  cardsRef.current = cards;
 
   useEffect(() => {
     const four = sample(group.letters, 4);
@@ -849,29 +886,35 @@ function MemoryMatchAct({ group, onExit, onComplete }: ActivityProps) {
     setFlipped([]);
     setMatched([]);
     setBusy(false);
+    matchedRef.current = 0;
     eng.arm();
+    sfx.listen();
     say("Kartları çevir, eş harfleri bul!", { rate: 0.88 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eng.round, eng.runId, group]);
 
   const tap = (i: number) => {
     if (busy || eng.feedback || eng.done) return;
-    if (flipped.includes(i) || matched.includes(cards[i].letter.id)) return;
+    const deck = cardsRef.current;
+    if (!deck[i]) return;
+    if (flipped.includes(i) || matched.includes(deck[i].letter.id)) return;
     sfx.flip();
-    say(cards[i].letter.say, { rate: 0.92 });
+    say(deck[i].letter.say, { rate: 0.92 });
     const nf = [...flipped, i];
     setFlipped(nf);
     if (nf.length < 2) return;
     setBusy(true);
     const [a, b] = nf;
-    if (cards[a].letter.id === cards[b].letter.id) {
+    if (deck[a].letter.id === deck[b].letter.id) {
+      const id = deck[a].letter.id;
       eng.after(() => {
         sfx.correct();
-        setMatched((m) => [...m, cards[a].letter.id]);
+        matchedRef.current += 1;
+        setMatched((m) => (m.includes(id) ? m : [...m, id]));
         setFlipped([]);
         setBusy(false);
-        if (matched.length + 1 === 4) {
-          eng.after(() => eng.settle(true, "Bütün eşleri buldun!", ""), 400);
+        if (matchedRef.current >= 4) {
+          eng.after(() => eng.settle(true, "Bütün eşleri buldun!", ""), 450);
         }
       }, 500);
     } else {
@@ -947,26 +990,26 @@ function PositionAct({ group, onExit, onComplete }: ActivityProps) {
 
   useEffect(() => {
     let found: { word: string; letter: LetterDef; pos: Pos } | null = null;
-    for (const letter of shuffle(group.letters)) {
-      const words = shuffle(group.words).filter(
-        (w) => w.length >= 3 && countChar(w, letter.id) === 1,
-      );
-      if (words.length === 0) continue;
-      const word = words[0];
-      const idx = word
-        .split("")
-        .findIndex((c) => c.toLocaleUpperCase("tr-TR") === letter.id);
-      const pos: Pos = idx === 0 ? "başta" : idx === word.length - 1 ? "sonda" : "ortada";
-      found = { word, letter, pos };
-      break;
+    // önce sesin tam bir kez geçtiği kelimeleri dene (başta/ortada/sonda çeşitliliği)
+    const candidates: { word: string; letter: LetterDef; pos: Pos }[] = [];
+    for (const letter of group.letters) {
+      for (const w of group.words) {
+        if (w.length < 3 || countChar(w, letter.id) !== 1) continue;
+        const idx = w.split("").findIndex((c) => trUpper(c) === letter.id);
+        const pos: Pos = idx === 0 ? "başta" : idx === w.length - 1 ? "sonda" : "ortada";
+        candidates.push({ word: w, letter, pos });
+      }
     }
-    if (!found) {
+    if (candidates.length > 0) {
+      found = pick(candidates);
+    } else {
       const word = pick(group.words);
       const letter = LETTER_BY_CHAR[trUpper(word[0])];
       found = { word, letter, pos: "başta" };
     }
     setQ(found);
     setChosen(null);
+    sfx.listen();
     say(found.word, { rate: 0.75 });
     eng.arm();
     // eslint-disable-next-line react-hooks/exhaustive-deps

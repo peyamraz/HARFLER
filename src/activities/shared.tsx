@@ -62,6 +62,19 @@ export function wordOptions(words: string[], target: string, n: number): string[
   return shuffle([target, ...sample(pool, n - 1)]);
 }
 
+/**
+ * Cevap harfi SEÇİLİ grupta olan kelimeleri döndürür (pedagojik doğruluk:
+ * çocuk henüz öğrenmediği seslerle karşılaşmasın). Boşsa tüm kelimeler.
+ */
+export function wordsForAnswer(group: GroupDef, answerOf: (w: string) => LetterDef | undefined): string[] {
+  const ids = new Set(group.letters.map((l) => l.id));
+  const ok = group.words.filter((w) => {
+    const a = answerOf(w);
+    return a !== undefined && ids.has(a.id);
+  });
+  return ok.length > 0 ? ok : group.words;
+}
+
 /** Grup kelimelerindeki harflerden uydurma (anlamsız) hece dizisi üretir. */
 export function nonsenseOf(group: GroupDef): string {
   const chars = new Set<string>();
@@ -401,7 +414,7 @@ export function ReplayButton({ text, label = "Sesi tekrar dinle" }: { text: stri
     <button
       type="button"
       onClick={() => {
-        sfx.tap();
+        sfx.listen();
         sayQuick(text);
       }}
       className="btn-toy inline-flex items-center gap-2 rounded-lg bg-sky text-white px-4 py-2 font-display font-bold text-sm"
@@ -411,21 +424,34 @@ export function ReplayButton({ text, label = "Sesi tekrar dinle" }: { text: stri
   );
 }
 
-export function BigWord({ text, highlight }: { text: string; highlight?: number }) {
+/**
+ * Kelimeyi büyük harflerle gösterir.
+ * - highlight: ilgili harf renkli vurgulanır (harf her zaman görünür)
+ * - blank: harf yerine boş kutu gösterilir (tamamlama etkinlikleri için)
+ */
+export function BigWord({ text, highlight, blank }: { text: string; highlight?: number; blank?: boolean }) {
   return (
     <div className="flex items-center justify-center gap-1 flex-wrap" aria-label={text}>
-      {text.split("").map((ch, i) => (
-        <span
-          key={i}
-          className={`font-display font-bold text-4xl sm:text-5xl leading-none px-1.5 ${
-            i === highlight
-              ? "text-coral-deep border-b-8 border-coral animate-pulse"
-              : "text-ink"
-          }`}
-        >
-          {i === highlight ? "_" : ch}
-        </span>
-      ))}
+      {text.split("").map((ch, i) => {
+        const hl = i === highlight;
+        return (
+          <span
+            key={i}
+            className={`font-display font-bold text-4xl sm:text-5xl leading-none px-1.5 ${
+              hl ? (blank ? "text-transparent" : "text-coral-deep anim-pulse-soft") : "text-ink"
+            }`}
+            style={
+              hl
+                ? blank
+                  ? { borderBottom: "8px solid #ff6b6b", minWidth: "1.6rem" }
+                  : { borderBottom: "8px solid #ffc145" }
+                : undefined
+            }
+          >
+            {hl && blank ? "_" : ch}
+          </span>
+        );
+      })}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { GROUPS } from "./game/letters";
 import { REMEMBER_SECONDS, TOTAL_ROUNDS, useSoundGame } from "./game/useSoundGame";
 import { say } from "./game/speech";
@@ -171,6 +171,28 @@ export default function App() {
   const [heroIdx, setHeroIdx] = useState(0);
   const heroLetter = group.letters[heroIdx % group.letters.length];
 
+  /* "Sırayla Dinle" zamanlayıcıları: grup değişince iptal et */
+  const seqTimers = useRef<number[]>([]);
+  useEffect(() => {
+    return () => {
+      seqTimers.current.forEach((t) => window.clearTimeout(t));
+      seqTimers.current = [];
+    };
+  }, [group.id]);
+  const playSequence = () => {
+    sfx.tap();
+    seqTimers.current.forEach((t) => window.clearTimeout(t));
+    seqTimers.current = [];
+    group.letters.forEach((l, i) => {
+      seqTimers.current.push(
+        window.setTimeout(() => {
+          sfx.listen();
+          say(`${l.say}. örnek: ${l.word}`, { rate: 0.85 });
+        }, i * 1500),
+      );
+    });
+  };
+
   const tileState = (id: string): TileState => {
     if (g.status === "answer") return "idle";
     if (g.status === "feedback" || g.status === "done") {
@@ -256,15 +278,7 @@ export default function App() {
               <button
                 type="button"
                 className="btn-toy sticker-sm rounded-xl bg-grape text-white px-4 py-2.5 font-display font-bold text-sm flex items-center gap-2"
-                onClick={() => {
-                  sfx.tap();
-                  group.letters.forEach((l, i) =>
-                    window.setTimeout(
-                      () => say(`${l.say}. örnek: ${l.word}`, { rate: 0.85 }),
-                      i * 1300,
-                    ),
-                  );
-                }}
+                onClick={playSequence}
               >
                 <IconPlay className="w-4 h-4" /> Sırayla Dinle
               </button>
@@ -339,7 +353,7 @@ export default function App() {
                       badge={i + 1}
                       sub={l.word}
                       onClick={() => {
-                        sfx.pop();
+                        sfx.listen();
                         say(`${l.say}. ${l.char}. örnek: ${l.word}`, { rate: 0.82 });
                       }}
                     />
@@ -445,12 +459,22 @@ export default function App() {
               <div className="text-center py-4">
                 {g.status === "playing" ? (
                   <div className="anim-pop">
-                    <div className="inline-flex items-center gap-3 sticker rounded-2xl bg-sky text-white px-6 py-4 mb-4">
-                      <IconSpeaker className="w-8 h-8 anim-pulse-soft" />
+                    <div className="inline-flex items-center gap-4 sticker rounded-2xl bg-sky text-white px-7 py-5 mb-4">
+                      <IconSpeaker className="w-9 h-9 anim-pulse-soft" />
+                      <span className="flex items-end gap-1.5 h-10" aria-hidden>
+                        {[0, 1, 2, 3, 4].map((i) => (
+                          <span
+                            key={i}
+                            className="wave-bar w-2.5 rounded-full bg-white"
+                            style={{ animationDelay: `${i * 0.12}s` }}
+                          />
+                        ))}
+                      </span>
                       <span className="font-display font-bold text-2xl">Dinle…</span>
                     </div>
                     <p className="text-ink-soft font-semibold">
-                      Tur {g.round}: hedef ses okunuyor, kulaklar açık!
+                      Tur {g.round}: hedef ses okunuyor, kulaklar açık! Ses gelmiyorsa cihaz
+                      sesini ve tarayıcı izinlerini kontrol et.
                     </p>
                   </div>
                 ) : (
@@ -641,7 +665,7 @@ export default function App() {
                   key={w}
                   type="button"
                   onClick={() => {
-                    sfx.pop();
+                    sfx.listen();
                     say(w, { rate: 0.8 });
                   }}
                   className="btn-toy sticker-sm rounded-xl bg-mint hover:bg-mint-deep px-4 py-2.5 font-display font-bold text-lg text-ink inline-flex items-center gap-2"
