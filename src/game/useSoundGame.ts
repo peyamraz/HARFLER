@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { GroupDef, LetterDef } from "./letters";
 import { shuffle } from "./letters";
 import { cancelSpeech, isSpeechSupported, say, setMuted as setSpeechMuted } from "./speech";
+import { setSfxMuted, sfx } from "./sfx";
 
 export const TOTAL_ROUNDS = 10;
 export const REMEMBER_SECONDS = 5;
@@ -23,6 +24,7 @@ export interface RunState {
   answeredIn: number | null;
   lastWord: string | null;
   newRecord: boolean;
+  correctCount: number;
   speechOk: boolean;
 }
 
@@ -41,6 +43,7 @@ const initialRun = (speechOk: boolean): RunState => ({
   answeredIn: null,
   lastWord: null,
   newRecord: false,
+  correctCount: 0,
   speechOk,
 });
 
@@ -102,44 +105,49 @@ export function useSoundGame(group: GroupDef) {
   );
 
   /* ---- tur akışı ---- */
-  const playRound = useCallback(
-    (n: number, tiles: LetterDef[]) => {
-      const target = seqRef.current[n - 1];
-      if (!target) return;
-      setRun((r) => ({
-        ...r,
-        status: "playing",
-        round: n,
-        target,
-        tiles: shuffle(tiles),
-        correctId: null,
-        wrongId: null,
-        bonusText: null,
-        answeredIn: null,
-      }));
-      say(`Sıra ${n}. seste. Bu sesi iyi dinle: ${target.say}`, {
-        rate: 0.86,
-        onEnd: () => {
-          const r = runRef.current;
-          if (r.status !== "playing" || r.round !== n) return;
-          setRun((cur) => ({ ...cur, status: "remember", rememberLeft: REMEMBER_SECONDS }));
-          const tick = window.setInterval(() => {
-            setRun((cur) => {
-              if (cur.status !== "remember") return cur;
-              const left = Math.round((cur.rememberLeft - 0.1) * 10) / 10;
-              if (left <= 0) {
-                window.clearInterval(tick);
-                return { ...cur, status: "answer", rememberLeft: 0 };
-              }
-              return { ...cur, rememberLeft: left };
-            });
-          }, 100);
-          timers.current.push(tick as unknown as number);
-        },
-      });
-    },
-    [],
-  );
+  const playRound = useCallback((n: number, tiles: LetterDef[]) => {
+    const target = seqRef.current[n - 1];
+    if (!target) return;
+    setRun((r) => ({
+      ...r,
+      status: "playing",
+      round: n,
+      target,
+      tiles: shuffle(tiles),
+      correctId: null,
+      wrongId: null,
+      bonusText: null,
+      answeredIn: null,
+    }));
+    say(`Sıra ${n}. seste. Kulaklar hazır mı? Dinle: ${target.say}`, {
+      rate: 0.82,
+      onEnd: () => {
+        const r = runRef.current;
+        if (r.status !== "playing" || r.round !== n) return;
+        sfx.tick();
+        setRun((cur) => ({ ...cur, status: "remember", rememberLeft: REMEMBER_SECONDS }));
+        let lastCeil = REMEMBER_SECONDS;
+        const tick = window.setInterval(() => {
+          const cur = runRef.current;
+          if (cur.status !== "remember") return;
+          const left = Math.round((cur.rememberLeft - 0.1) * 10) / 10;
+          if (left <= 0) {
+            window.clearInterval(tick);
+            sfx.flip();
+            setRun((c) => ({ ...c, status: "answer", rememberLeft: 0 }));
+            return;
+          }
+          const ceil = Math.ceil(left);
+          if (ceil < lastCeil) {
+            lastCeil = ceil;
+            sfx.tick();
+          }
+          setRun((c) => ({ ...c, rememberLeft: left }));
+        }, 100);
+        timers.current.push(tick as unknown as number);
+      },
+    });
+  }, []);
 
   const advanceRound = useCallback(() => {
     const cur = runRef.current;
@@ -151,6 +159,7 @@ export function useSoundGame(group: GroupDef) {
         localStorage.setItem(recordKey, String(cur.score));
         setRecord(cur.score);
       }
+      sfx.win();
       setRun((x) => ({ ...x, status: "done", newRecord }));
     } else {
       playRound(cur.round + 1, cur.tiles);
@@ -158,8 +167,11 @@ export function useSoundGame(group: GroupDef) {
   }, [playRound, recordKey]);
 
   const startGame = useCallback(() => {
+    const st = runRef.current.status;
+    if (st !== "start" && st !== "done") return; // çift başlatmaya karşı koruma
     clearTimers();
     cancelSpeech();
+    sfx.tap();
     const letters = group.letters;
     seqRef.current = Array.from(
       { length: TOTAL_ROUNDS },
@@ -196,8 +208,10 @@ export function useSoundGame(group: GroupDef) {
             }),
           );
         }
+        if (hot) sfx.sparkle();
+        else sfx.correct();
         say(`${letter.say} sesi, ${letter.char} harfi. Dinle ve tekrar et: ${letter.say}!`, {
-          rate: 0.85,
+          rate: 0.8,
         });
         setRun((cur) => ({
           ...cur,
@@ -206,11 +220,13 @@ export function useSoundGame(group: GroupDef) {
           score: cur.score + gained,
           streak: cur.streak + 1,
           bestStreak: Math.max(cur.bestStreak, cur.streak + 1),
+          correctCount: cur.correctCount + 1,
           bonusText,
           answeredIn: Math.round((REMEMBER_SECONDS - cur.rememberLeft) * 10) / 10,
         }));
         later(() => advanceRound(), 2600);
       } else {
+        sfx.wrong();
         say("Olmadı, tekrar dene!", { rate: 0.92 });
         setRun((cur) => ({ ...cur, wrongId: letter.id, streak: 0, bonusText: null }));
         later(
@@ -227,7 +243,8 @@ export function useSoundGame(group: GroupDef) {
     const r = runRef.current;
     if (r.status !== "answer" || !r.target) return;
     cancelSpeech();
-    say(`Süre doldu! Doğru ses ${r.target.say} idi. Dinle: ${r.target.say}`, { rate: 0.85 });
+    sfx.wrong();
+    say(`Süre doldu! Doğru ses ${r.target.say} idi. Dinle: ${r.target.say}`, { rate: 0.8 });
     setRun((cur) => ({
       ...cur,
       status: "feedback",
@@ -240,12 +257,16 @@ export function useSoundGame(group: GroupDef) {
 
   const replaySound = useCallback(() => {
     const r = runRef.current;
-    if (r.target) say(r.target.say, { rate: 0.8 });
+    if (r.target) {
+      sfx.tap();
+      say(r.target.say, { rate: 0.78 });
+    }
   }, []);
 
   /* ---- klavye ---- */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.repeat) return;
       const r = runRef.current;
       if (e.code === "Space") {
         e.preventDefault();
@@ -266,7 +287,9 @@ export function useSoundGame(group: GroupDef) {
     setMutedState((m) => {
       const next = !m;
       setSpeechMuted(next);
+      setSfxMuted(next);
       if (next) cancelSpeech();
+      else sfx.tap();
       return next;
     });
   }, []);

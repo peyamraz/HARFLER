@@ -138,3 +138,21 @@ export function shuffle<T>(arr: T[]): T[] {
   }
   return a;
 }
+
+/** 29 harfin tamamı: karakter (büyük) → tanım. Türkçe büyük/küçük harf duyarlı. */
+export const LETTER_BY_CHAR: Record<string, LetterDef> = {};
+for (const g of GROUPS) {
+  for (const l of g.letters) LETTER_BY_CHAR[l.id] = l;
+}
+
+/** "i" → "İ" gibi Türkçe büyük harf dönüşümü. */
+export function trUpper(ch: string): string {
+  return ch.toLocaleUpperCase("tr-TR");
+}
+
+export function trLower(ch: string): string {
+  return ch.toLocaleLowerCase("tr-TR");
+}
+
+export const TR_VOWELS = new Set(["A", "E", "I", "İ", "O", "Ö", "U", "Ü"]);
+export const trVowelChars = new Set("aeıioöuü".split(""));
