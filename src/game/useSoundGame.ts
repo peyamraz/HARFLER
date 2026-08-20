@@ -84,7 +84,12 @@ export function useSoundGame(group: GroupDef) {
 
   /* ---- grup değişince skoru yükle, süren oyunu durdur ---- */
   useEffect(() => {
-    const v = Number(localStorage.getItem(recordKey) ?? 0);
+    let v = 0;
+    try {
+      v = Number(localStorage.getItem(recordKey) ?? 0);
+    } catch {
+      v = 0;
+    }
     setRecord(Number.isFinite(v) ? v : 0);
   }, [recordKey]);
 
@@ -157,7 +162,11 @@ export function useSoundGame(group: GroupDef) {
       let newRecord = false;
       if (cur.score > recordRef.current) {
         newRecord = true;
-        localStorage.setItem(recordKey, String(cur.score));
+        try {
+          localStorage.setItem(recordKey, String(cur.score));
+        } catch {
+          /* depolama kapalıysa rekor oturumluk tutulur */
+        }
         setRecord(cur.score);
       }
       sfx.win();

@@ -57,6 +57,7 @@ function OrderRace({ group, onExit, onComplete }: ActivityProps) {
 
   const tap = (l: LetterDef) => {
     if (eng.done || eng.feedback) return;
+    if (group.letters.slice(0, placed).some((p) => p.id === l.id)) return;
     const expected = group.letters[placed];
     if (l.id === expected.id) {
       sfx.pop();
@@ -1092,26 +1093,35 @@ export const ACTIVITY_COUNT = ACTIVITIES.length;
 function loadBest(groupId: string): Record<string, number> {
   const out: Record<string, number> = {};
   for (const a of ACTIVITIES) {
-    const v = Number(localStorage.getItem(`etk-yildiz-${groupId}-${a.id}`) ?? 0);
+    let v = 0;
+    try {
+      v = Number(localStorage.getItem(`etk-yildiz-${groupId}-${a.id}`) ?? 0);
+    } catch {
+      v = 0;
+    }
     out[a.id] = Number.isFinite(v) ? v : 0;
   }
   return out;
 }
 
-/** Tek bir etkinlik hata verse bile merkez çökmesin. */
-class ActivityBoundary extends Component<{ onExit: () => void; children: ReactNode }, { failed: boolean }> {
-  state = { failed: false };
-  static getDerivedStateFromError() {
-    return { failed: true };
+/** Tek bir etkinlik hata verse bile merkez çökmesin; hatayı görünür kıl. */
+class ActivityBoundary extends Component<{ onExit: () => void; children: ReactNode }, { failed: boolean; msg: string }> {
+  state = { failed: false, msg: "" };
+  static getDerivedStateFromError(err: unknown) {
+    return { failed: true, msg: err instanceof Error ? err.message : "Bilinmeyen hata" };
+  }
+  componentDidCatch(error: unknown) {
+    console.error("[Etkinlik hatası]", error);
   }
   render() {
     if (this.state.failed) {
       return (
         <div className="sticker rounded-2xl bg-paper px-6 py-10 text-center anim-pop">
           <p className="font-display font-bold text-2xl text-ink mb-2">Oyun küçük bir şaka yaptı!</p>
-          <p className="text-ink-soft font-semibold mb-5">
+          <p className="text-ink-soft font-semibold mb-2">
             Bu etkinlik beklenmedik bir hata verdi. Listeye dönüp tekrar deneyebilirsin.
           </p>
+          <p className="text-[12px] text-coral-deep font-bold mb-5 break-all">{this.state.msg}</p>
           <button
             type="button"
             onClick={this.props.onExit}
@@ -1135,16 +1145,27 @@ export function ActivityCenter({
 }) {
   const [active, setActive] = useState<ActivityMeta | null>(null);
   const [best, setBest] = useState<Record<string, number>>(() => loadBest(group.id));
+  const firstRun = useRef(true);
 
+  /* yalnızca grup DEĞİŞİNCE sıfırla — ilk açılışta dokunma */
   useEffect(() => {
+    if (firstRun.current) {
+      firstRun.current = false;
+      return;
+    }
     setActive(null);
     setBest(loadBest(group.id));
   }, [group.id]);
 
   const handleComplete = (meta: ActivityMeta, res: ActivityResult) => {
     const key = `etk-yildiz-${group.id}-${meta.id}`;
-    const prev = Number(localStorage.getItem(key) ?? 0);
-    if (res.stars > prev) localStorage.setItem(key, String(res.stars));
+    let prev = 0;
+    try {
+      prev = Number(localStorage.getItem(key) ?? 0);
+      if (res.stars > prev) localStorage.setItem(key, String(res.stars));
+    } catch {
+      /* depolama kapalıysa yıldız oturumluk kalır */
+    }
     setBest((b) => ({ ...b, [meta.id]: Math.max(prev, res.stars) }));
     onPoints(res.score);
   };
@@ -1152,15 +1173,13 @@ export function ActivityCenter({
   if (active) {
     const C = active.comp;
     return (
-      <div key={`${group.id}-${active.id}`} className="anim-rise">
-        <ActivityBoundary onExit={() => setActive(null)}>
-          <C
-            group={group}
-            onExit={() => setActive(null)}
-            onComplete={(r) => handleComplete(active, r)}
-          />
-        </ActivityBoundary>
-      </div>
+      <ActivityBoundary key={`${group.id}-${active.id}`} onExit={() => setActive(null)}>
+        <C
+          group={group}
+          onExit={() => setActive(null)}
+          onComplete={(r) => handleComplete(active, r)}
+        />
+      </ActivityBoundary>
     );
   }
 

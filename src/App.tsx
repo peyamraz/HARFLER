@@ -134,8 +134,23 @@ const NAV = [
 
 /* ------------------------------------------------ uygulama */
 
+function safeGet(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function safeSet(key: string, val: string): void {
+  try {
+    localStorage.setItem(key, val);
+  } catch {
+    /* depolama kapalıysa puan oturumluk tutulur */
+  }
+}
+
 export default function App() {
-  const [groupId, setGroupId] = useState("g1");
+  const [groupId, setGroupId] = useState("anetil");
   const group = useMemo(() => GROUPS.find((g) => g.id === groupId) ?? GROUPS[0], [groupId]);
   const g = useSoundGame(group);
 
@@ -144,14 +159,14 @@ export default function App() {
 
   /* toplam etkinlik puanı (grup başına, kalıcı) */
   useEffect(() => {
-    const v = Number(localStorage.getItem(`etk-puan-${group.id}`) ?? 0);
+    const v = Number(safeGet(`etk-puan-${group.id}`) ?? 0);
     setTotalPoints(Number.isFinite(v) ? v : 0);
   }, [group.id]);
 
   const addPoints = (n: number) => {
     setTotalPoints((p) => {
       const next = p + n;
-      localStorage.setItem(`etk-puan-${group.id}`, String(next));
+      safeSet(`etk-puan-${group.id}`, String(next));
       return next;
     });
   };
@@ -509,7 +524,7 @@ export default function App() {
 
             {/* ---- cevap ---- */}
             {g.status === "answer" && (
-              <div className="text-center anim-rise">
+              <div className="text-center">
                 <p className="font-display font-bold text-2xl text-ink mb-1">Şimdi sesi söyle!</p>
                 <p className="text-ink-soft font-semibold mb-6">
                   Hangi harf? Dokun ve söyle. <span className="hidden sm:inline">(1–6 tuşları da çalışır)</span>
