@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FC, type ReactNode } from "react";
+import { Component, useEffect, useRef, useState, type FC, type ReactNode } from "react";
 import type { GroupDef, LetterDef } from "../game/letters";
 import { LETTER_BY_CHAR, shuffle, trUpper } from "../game/letters";
 import { say } from "../game/speech";
@@ -1098,6 +1098,34 @@ function loadBest(groupId: string): Record<string, number> {
   return out;
 }
 
+/** Tek bir etkinlik hata verse bile merkez çökmesin. */
+class ActivityBoundary extends Component<{ onExit: () => void; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    if (this.state.failed) {
+      return (
+        <div className="sticker rounded-2xl bg-paper px-6 py-10 text-center anim-pop">
+          <p className="font-display font-bold text-2xl text-ink mb-2">Oyun küçük bir şaka yaptı!</p>
+          <p className="text-ink-soft font-semibold mb-5">
+            Bu etkinlik beklenmedik bir hata verdi. Listeye dönüp tekrar deneyebilirsin.
+          </p>
+          <button
+            type="button"
+            onClick={this.props.onExit}
+            className="btn-toy sticker-sm rounded-xl bg-sky text-white px-6 py-3 font-display font-bold inline-flex items-center gap-2"
+          >
+            <IconX className="w-5 h-5" /> Etkinlik Listesine Dön
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export function ActivityCenter({
   group,
   onPoints,
@@ -1125,11 +1153,13 @@ export function ActivityCenter({
     const C = active.comp;
     return (
       <div key={`${group.id}-${active.id}`} className="anim-rise">
-        <C
-          group={group}
-          onExit={() => setActive(null)}
-          onComplete={(r) => handleComplete(active, r)}
-        />
+        <ActivityBoundary onExit={() => setActive(null)}>
+          <C
+            group={group}
+            onExit={() => setActive(null)}
+            onComplete={(r) => handleComplete(active, r)}
+          />
+        </ActivityBoundary>
       </div>
     );
   }

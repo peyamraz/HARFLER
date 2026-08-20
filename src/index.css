@@ -185,7 +185,23 @@ body {
   animation: pulse-soft 1s ease-in-out infinite;
 }
 
-@keyframes rise-fade {
+/* giriş animasyonu: aşağıdan yumuşakça yükselerek belirir */
+@keyframes rise-in {
+  0% {
+    transform: translateY(26px) scale(0.98);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+.anim-rise {
+  animation: rise-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* yukarı süzülerek kaybolan puan yazıları için */
+@keyframes float-up {
   0% {
     transform: translateY(0);
     opacity: 1;
@@ -195,8 +211,8 @@ body {
     opacity: 0;
   }
 }
-.anim-rise {
-  animation: rise-fade 1.1s ease-out both;
+.anim-float-up {
+  animation: float-up 1.1s ease-out both;
 }
 
 @keyframes confetti-fly {

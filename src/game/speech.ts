@@ -69,27 +69,31 @@ export function say(
     onEnd?.();
   };
 
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = "tr-TR";
-  if (trVoice) u.voice = trVoice;
-  u.rate = rate;
-  u.pitch = pitch;
-  u.volume = 1;
-  u.onend = finish;
-  u.onerror = finish;
-  // güvenlik: bazı tarayıcılarda onend hiç/geç gelebiliyor
-  window.setTimeout(finish, 1800 + text.length * 120);
+  try {
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "tr-TR";
+    if (trVoice) u.voice = trVoice;
+    u.rate = rate;
+    u.pitch = pitch;
+    u.volume = 1;
+    u.onend = finish;
+    u.onerror = finish;
+    // güvenlik: bazı tarayıcılarda onend hiç/geç gelebiliyor
+    window.setTimeout(finish, 1800 + text.length * 120);
 
-  if (speakTimer !== null) window.clearTimeout(speakTimer);
-  window.speechSynthesis.cancel();
-  speakTimer = window.setTimeout(() => {
-    speakTimer = null;
-    try {
-      window.speechSynthesis.speak(u);
-    } catch {
-      finish();
-    }
-  }, 90);
+    if (speakTimer !== null) window.clearTimeout(speakTimer);
+    window.speechSynthesis.cancel();
+    speakTimer = window.setTimeout(() => {
+      speakTimer = null;
+      try {
+        window.speechSynthesis.speak(u);
+      } catch {
+        finish();
+      }
+    }, 90);
+  } catch {
+    finish();
+  }
 }
 
 /** Kelime/cümleleri oyun temposuna göre biraz daha hızlı okur. */
