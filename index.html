@@ -7,21 +7,183 @@
     <title>ANETİL Ses Avı · 1. Sınıf Ses Grubu Oyunu</title>
     <meta
       name="description"
-      content="MEB Türkiye Yüzyılı Maarif Modeli 1. grup sesleri (A-N-E-T-İ-L) ile sesli okuma ve dinleme oyunu. Dinle, akılda tut, sesi söyle, ekstra puan kazan!"
+      content="MEB Türkiye Yüzyılı Maarif Modeli ses grupları (ANETİL, OKURIM, ÜSÖYDZ, ÇBGCŞ, PHVĞFJ) ile sesli okuma ve dinleme oyunu. Dinle, akılda tut, sesi söyle, ekstra puan kazan!"
     />
     <link
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect x='8' y='8' width='84' height='84' rx='18' fill='%23FF6B6B' stroke='%232b3a55' stroke-width='8'/%3E%3Ctext x='50' y='70' font-size='56' font-family='Arial' font-weight='bold' text-anchor='middle' fill='white'%3EA%3C/text%3E%3C/svg%3E"
     />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Yazı tipleri: sayfa açılışını BLOKLAZ; yüklenemezse yedek fontla devam eder -->
     <link
+      rel="preload"
+      as="style"
       href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800;900&display=swap"
-      rel="stylesheet"
     />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800;900&display=swap"
+      media="print"
+      onload="this.media='all'"
+    />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800;900&display=swap"
+      />
+    </noscript>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #e9f6ef;
+      }
+      #boot-error {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: rgba(233, 246, 239, 0.97);
+        font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+      }
+      #boot-error .card {
+        max-width: 460px;
+        background: #fff;
+        border: 3px solid #2b3a55;
+        border-radius: 16px;
+        box-shadow: 0 6px 0 rgba(43, 58, 85, 0.9);
+        padding: 24px;
+        text-align: center;
+        color: #2b3a55;
+      }
+      #boot-error h2 {
+        margin: 0 0 8px;
+        font-size: 22px;
+      }
+      #boot-error p {
+        margin: 0 0 12px;
+        font-weight: 600;
+        color: #66779a;
+      }
+      #boot-error code {
+        display: block;
+        background: #fdf6e3;
+        border: 2px dashed #e5a326;
+        border-radius: 10px;
+        padding: 10px;
+        font-size: 12px;
+        word-break: break-word;
+        margin-bottom: 14px;
+      }
+      #boot-error button {
+        font: inherit;
+        font-weight: 800;
+        background: #6bcb77;
+        color: #fff;
+        border: 3px solid #2b3a55;
+        border-radius: 12px;
+        box-shadow: 0 4px 0 #2b3a55;
+        padding: 10px 22px;
+        cursor: pointer;
+      }
+      #boot-splash {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #e9f6ef;
+        font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+        color: #2b3a55;
+        font-weight: 800;
+        letter-spacing: 0.1em;
+      }
+      #boot-splash .dot {
+        animation: bootblink 1s ease-in-out infinite;
+      }
+      @keyframes bootblink {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.25;
+        }
+      }
+    </style>
+    <script>
+      /* Açılışta oluşan HER hatayı görünür yap — beyaz ekran kalmasın */
+      window.__bootErrors = [];
+      window.addEventListener("error", function (e) {
+        window.__bootErrors.push(
+          (e && e.message ? e.message : "Bilinmeyen hata") +
+            " — " +
+            (e && e.filename ? e.filename : "?") +
+            ":" +
+            (e && e.lineno ? e.lineno : "?"),
+        );
+        var box = document.getElementById("boot-error");
+        if (box) {
+          box.hidden = false;
+          var code = box.querySelector("code");
+          if (code) code.textContent = window.__bootErrors.join("\n");
+        }
+        var splash = document.getElementById("boot-splash");
+        if (splash) splash.hidden = true;
+      });
+      window.addEventListener("unhandledrejection", function (e) {
+        console.error("[Ses Avı] Yakalanmayan söz hatası:", e && e.reason);
+      });
+      /* Betik/varlık yüklenemezse (yakalama aşamasında) bunu da göster */
+      window.addEventListener(
+        "error",
+        function (e) {
+          var t = e && e.target;
+          if (t && (t.tagName === "SCRIPT" || t.tagName === "LINK")) {
+            window.__bootErrors.push("Dosya yüklenemedi: " + (t.src || t.href || "?"));
+            var box = document.getElementById("boot-error");
+            if (box) {
+              box.hidden = false;
+              var code = box.querySelector("code");
+              if (code) code.textContent = window.__bootErrors.join("\n");
+            }
+            var splash = document.getElementById("boot-splash");
+            if (splash) splash.hidden = true;
+          }
+        },
+        true,
+      );
+    </script>
   </head>
   <body>
     <div id="root"></div>
+    <div id="boot-splash">
+      <span>ANETİL SES AVI YÜKLENİYOR<span class="dot">…</span></span>
+    </div>
+    <div id="boot-error" hidden>
+      <div class="card">
+        <h2>Oyun yüklenirken bir sorun oldu</h2>
+        <p>Hata ayrıntısı aşağıda. Sayfayı yenilemek genellikle çözer.</p>
+        <code></code>
+        <button type="button" onclick="window.location.reload()">Sayfayı Yenile</button>
+      </div>
+    </div>
+    <script type="module">
+      /* Uygulama başarıyla bağlanınca açılış ekranını kaldır */
+      var check = setInterval(function () {
+        var root = document.getElementById("root");
+        if (root && root.children.length > 0) {
+          var splash = document.getElementById("boot-splash");
+          if (splash) splash.hidden = true;
+          clearInterval(check);
+        }
+      }, 120);
+      setTimeout(function () {
+        clearInterval(check);
+      }, 20000);
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

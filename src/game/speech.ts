@@ -1,35 +1,68 @@
-/** Türkçe ses sentezi sarmalayıcısı — tarayıcının tr-TR sesiyle okur. */
+/** Türkçe ses sentezi sarmalayıcısı — tarayıcının tr-TR sesiyle okur.
+ *  Tüm erişimler korunaklıdır: ses motoru hiç çalışmazsa bile oyun akmaya devam eder. */
 
 let trVoice: SpeechSynthesisVoice | null = null;
 let muted = false;
 let speakTimer: number | null = null;
 
-const supported =
-  typeof window !== "undefined" &&
-  "speechSynthesis" in window &&
-  typeof SpeechSynthesisUtterance !== "undefined";
+const supported = (() => {
+  try {
+    return (
+      typeof window !== "undefined" &&
+      "speechSynthesis" in window &&
+      typeof SpeechSynthesisUtterance !== "undefined"
+    );
+  } catch {
+    return false;
+  }
+})();
 
-function pickVoice() {
-  if (!supported) return;
-  const voices = window.speechSynthesis.getVoices();
-  trVoice =
-    voices.find((v) => v.lang && v.lang.toLowerCase().replace("_", "-").startsWith("tr")) ??
-    voices.find((v) => v.default) ??
-    voices[0] ??
-    null;
+/** speechSynthesis nesnesine güvenli erişim — kısıtlı ortamlarda null döner. */
+function synth(): SpeechSynthesis | null {
+  try {
+    if (!supported) return null;
+    return window.speechSynthesis ?? null;
+  } catch {
+    return null;
+  }
 }
 
-if (supported) {
-  pickVoice();
-  window.speechSynthesis.onvoiceschanged = pickVoice;
-  // Chrome uzun konuşmaları gizlice duraklatabilir; düzenli devam ettir.
-  window.setInterval(() => {
-    if (!muted && window.speechSynthesis.speaking) window.speechSynthesis.resume();
-  }, 3500);
+function pickVoice() {
+  try {
+    const s = synth();
+    if (!s) return;
+    const voices = s.getVoices();
+    trVoice =
+      voices.find((v) => v.lang && v.lang.toLowerCase().replace("_", "-").startsWith("tr")) ??
+      voices.find((v) => v.default) ??
+      voices[0] ??
+      null;
+  } catch {
+    trVoice = null;
+  }
+}
+
+try {
+  if (supported) {
+    pickVoice();
+    const s = synth();
+    if (s) s.onvoiceschanged = pickVoice;
+    // Chrome uzun konuşmaları gizlice duraklatabilir; düzenli devam ettir.
+    window.setInterval(() => {
+      try {
+        const s2 = synth();
+        if (s2 && !muted && s2.speaking) s2.resume();
+      } catch {
+        /* geç */
+      }
+    }, 3500);
+  }
+} catch {
+  /* ses motoru hiç yoksa oyun yine çalışır */
 }
 
 export function isSpeechSupported(): boolean {
-  return supported;
+  return supported && synth() !== null;
 }
 
 export function setMuted(m: boolean) {
@@ -38,12 +71,16 @@ export function setMuted(m: boolean) {
 }
 
 export function cancelSpeech() {
-  if (!supported) return;
-  if (speakTimer !== null) {
-    window.clearTimeout(speakTimer);
-    speakTimer = null;
+  try {
+    if (speakTimer !== null) {
+      window.clearTimeout(speakTimer);
+      speakTimer = null;
+    }
+    const s = synth();
+    if (s) s.cancel();
+  } catch {
+    /* geç */
   }
-  window.speechSynthesis.cancel();
 }
 
 /**
@@ -57,17 +94,23 @@ export function say(
   opts?: { rate?: number; pitch?: number; onEnd?: () => void },
 ): void {
   const { rate = 0.82, pitch = 1.12, onEnd } = opts ?? {};
-  if (!supported || muted) {
-    if (onEnd) window.setTimeout(onEnd, Math.min(750, 280 + text.length * 40));
-    return;
-  }
 
   let done = false;
   const finish = () => {
     if (done) return;
     done = true;
-    onEnd?.();
+    try {
+      onEnd?.();
+    } catch {
+      /* geç */
+    }
   };
+
+  const s = synth();
+  if (!s || muted) {
+    window.setTimeout(finish, Math.min(750, 280 + text.length * 40));
+    return;
+  }
 
   try {
     const u = new SpeechSynthesisUtterance(text);
@@ -82,11 +125,11 @@ export function say(
     window.setTimeout(finish, 1800 + text.length * 120);
 
     if (speakTimer !== null) window.clearTimeout(speakTimer);
-    window.speechSynthesis.cancel();
+    s.cancel();
     speakTimer = window.setTimeout(() => {
       speakTimer = null;
       try {
-        window.speechSynthesis.speak(u);
+        s.speak(u);
       } catch {
         finish();
       }

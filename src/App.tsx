@@ -223,8 +223,12 @@ export default function App() {
       const jsTags = Array.from(document.querySelectorAll<HTMLScriptElement>("script[src]"));
       const cssParts: string[] = [];
       for (const el of cssTags) {
-        const css = await fetch(el.href).then((r) => r.text());
-        cssParts.push(`<style>\n${css}\n</style>`);
+        try {
+          const css = await fetch(el.href).then((r) => r.text());
+          if (css) cssParts.push(`<style>\n${css}\n</style>`);
+        } catch {
+          /* ulaşılamayan stil (ör. font) atlanır — oyun yine çalışır */
+        }
       }
       const jsParts: string[] = [];
       for (const el of jsTags) {
@@ -240,10 +244,10 @@ export default function App() {
 <title>ANETİL Ses Avı · Çevrimdışı Sürüm</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
 ${cssParts.join("\n")}
 </head>
-<body>
+<body style="margin:0;background:#e9f6ef">
 <div id="root"></div>
 ${jsParts.join("\n")}
 </body>
