@@ -161,6 +161,31 @@ export function IconArrowDown({ className = "w-6 h-6" }: IconProps) {
   );
 }
 
+export function IconDownload({ className = "w-6 h-6" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} {...S} aria-hidden>
+      <path d="M12 4v11M7.5 10.5L12 15l4.5-4.5" />
+      <path d="M4.5 16.5v2A1.5 1.5 0 0 0 6 20h12a1.5 1.5 0 0 0 1.5-1.5v-2" />
+    </svg>
+  );
+}
+
+export function IconFolder({ className = "w-6 h-6" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} {...S} aria-hidden>
+      <path d="M3.5 7A1.5 1.5 0 0 1 5 5.5h4l2 2.5h8A1.5 1.5 0 0 1 20.5 9.5V17A1.5 1.5 0 0 1 19 18.5H5A1.5 1.5 0 0 1 3.5 17V7z" />
+    </svg>
+  );
+}
+
+export function IconCursor({ className = "w-6 h-6" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} {...S} aria-hidden>
+      <path d="M6 3.5l12 8.2-5.2 1 3 5.6-2.5 1.3-3-5.6L6 17.5V3.5z" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 export function IconSparkle({ className = "w-6 h-6" }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden>

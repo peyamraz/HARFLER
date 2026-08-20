@@ -12,8 +12,11 @@ import {
   IconBook,
   IconBrain,
   IconCheck,
+  IconCursor,
+  IconDownload,
   IconEar,
   IconFlame,
+  IconFolder,
   IconHand,
   IconPlay,
   IconSparkle,
@@ -130,6 +133,7 @@ const NAV = [
   { id: "etkinlikler", label: "Etkinlikler" },
   { id: "kelimeler", label: "Kelime Bahçesi" },
   { id: "bilgi", label: "Bilgi" },
+  { id: "indir", label: "İndir" },
 ];
 
 /* ------------------------------------------------ uygulama */
@@ -208,6 +212,61 @@ export default function App() {
     });
   };
 
+  /* ---- tek dosyalık çevrimdışı sürümü indir ---- */
+  const [dlState, setDlState] = useState<"idle" | "busy" | "ok" | "err">("idle");
+  const downloadStandalone = async () => {
+    if (dlState === "busy") return;
+    sfx.tap();
+    setDlState("busy");
+    try {
+      const cssTags = Array.from(document.querySelectorAll<HTMLLinkElement>("link[rel='stylesheet']"));
+      const jsTags = Array.from(document.querySelectorAll<HTMLScriptElement>("script[src]"));
+      const cssParts: string[] = [];
+      for (const el of cssTags) {
+        const css = await fetch(el.href).then((r) => r.text());
+        cssParts.push(`<style>\n${css}\n</style>`);
+      }
+      const jsParts: string[] = [];
+      for (const el of jsTags) {
+        let js = await fetch(el.src).then((r) => r.text());
+        js = js.replace(/<\/script/gi, "<\\/script");
+        jsParts.push(`<script type="module">\n${js}\n<\/script>`);
+      }
+      const doc = `<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ANETİL Ses Avı · Çevrimdışı Sürüm</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+${cssParts.join("\n")}
+</head>
+<body>
+<div id="root"></div>
+${jsParts.join("\n")}
+</body>
+</html>`;
+      const blob = new Blob([doc], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "anetil-ses-avi.html";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+      sfx.win();
+      setDlState("ok");
+      window.setTimeout(() => setDlState("idle"), 3200);
+    } catch {
+      sfx.wrong();
+      setDlState("err");
+      window.setTimeout(() => setDlState("idle"), 4000);
+    }
+  };
+
   const tileState = (id: string): TileState => {
     if (g.status === "answer") return "idle";
     if (g.status === "feedback" || g.status === "done") {
@@ -246,6 +305,18 @@ export default function App() {
           <div className="flex items-center gap-2.5">
             <StatChip label="Toplam Puan" value={totalPoints} icon={<IconSparkle className="w-5 h-5 text-amber-deep" />} accent="text-amber-deep" />
             <StatChip label={`Rekor · ${group.name}`} value={g.record} icon={<IconTrophy className="w-5 h-5 text-coral-deep" />} accent="text-coral-deep" />
+            <button
+              type="button"
+              onClick={downloadStandalone}
+              disabled={dlState === "busy"}
+              className="btn-toy sticker-sm rounded-lg bg-ink text-mint px-4 h-11 flex items-center justify-center gap-2 font-display font-bold text-sm"
+              title="Oyunu tek dosya olarak indir (çevrimdışı çalışır)"
+            >
+              <IconDownload className={`w-5 h-5 ${dlState === "busy" ? "anim-pulse-soft" : ""}`} />
+              <span className="hidden sm:inline">
+                {dlState === "busy" ? "HAZIRLANIYOR…" : dlState === "ok" ? "İNDİRİLDİ!" : dlState === "err" ? "TEKRAR DENE" : "İNDİR"}
+              </span>
+            </button>
             <button
               type="button"
               onClick={g.toggleMute}
@@ -777,6 +848,76 @@ export default function App() {
                 </li>
               ))}
             </ol>
+          </div>
+        </section>
+
+        {/* ---------------- indir & çevrimdışı oyna ---------------- */}
+        <section id="indir" className="scroll-mt-20 mt-12">
+          <div className="sticker rounded-2xl bg-amber/70 p-6 sm:p-7 relative overflow-hidden">
+            <div className="absolute -left-6 -bottom-8 w-36 h-36 rounded-full bg-white/20 pointer-events-none" />
+            <div className="absolute -right-8 -top-10 w-40 h-40 rounded-full bg-white/20 pointer-events-none" />
+            <div className="relative grid lg:grid-cols-[1.2fr_1fr] gap-6 items-center">
+              <div>
+                <p className="text-[11px] font-black tracking-[0.22em] text-coral-deep uppercase mb-1.5">
+                  GitHub gerekmez · Sunucu gerekmez
+                </p>
+                <h2 className="font-display font-bold text-2xl sm:text-3xl text-ink leading-tight mb-2">
+                  Oyunu indir, her yerde oyna
+                </h2>
+                <p className="text-ink font-semibold text-sm sm:text-base max-w-lg">
+                  Tek dosyalık <span className="font-black">anetil-ses-avi.html</span> iner. Sınıfta
+                  akıllı tahtada, evde bilgisayarda, internetsiz telefonda bile çift tıklayıp
+                  açarsın. Skorlar cihazda saklanır.
+                </p>
+                <ol className="flex flex-wrap gap-x-6 gap-y-2 mt-4">
+                  {[
+                    { ic: <IconDownload className="w-4 h-4" />, t: "İNDİR'e bas" },
+                    { ic: <IconFolder className="w-4 h-4" />, t: "Dosyayı bul" },
+                    { ic: <IconCursor className="w-4 h-4" />, t: "Çift tıkla, oyna!" },
+                  ].map((s, i) => (
+                    <li key={s.t} className="flex items-center gap-2 font-display font-bold text-sm text-ink">
+                      <span className="w-7 h-7 rounded-full bg-ink text-amber flex items-center justify-center">
+                        {i === 0 ? s.ic : <span className="text-[13px]">{i + 1}</span>}
+                      </span>
+                      {s.t}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+              <div className="flex flex-col items-start lg:items-center gap-3">
+                <button
+                  type="button"
+                  onClick={downloadStandalone}
+                  disabled={dlState === "busy"}
+                  className={`btn-toy sticker rounded-2xl px-8 py-4 font-display font-bold text-xl inline-flex items-center gap-3 ${
+                    dlState === "ok" ? "bg-leaf text-white" : "bg-coral text-white"
+                  }`}
+                >
+                  {dlState === "busy" ? (
+                    <>
+                      <IconDownload className="w-6 h-6 anim-pulse-soft" /> HAZIRLANIYOR…
+                    </>
+                  ) : dlState === "ok" ? (
+                    <>
+                      <IconCheck className="w-6 h-6" /> İNDİRİLDİ!
+                    </>
+                  ) : (
+                    <>
+                      <IconDownload className="w-6 h-6" /> TEKLİ DOSYAYI İNDİR
+                    </>
+                  )}
+                </button>
+                {dlState === "err" && (
+                  <p className="font-bold text-sm text-coral-deep bg-white/70 rounded-lg px-3 py-1.5">
+                    İndirme hazırlanamadı, tekrar dene.
+                  </p>
+                )}
+                <p className="text-[12px] text-ink/80 font-semibold max-w-xs lg:text-center">
+                  Yalnızca yazı tipleri için ilk açılışta internet ister; oyun, sesler ve puanlar
+                  tamamen çevrimdışı çalışır.
+                </p>
+              </div>
+            </div>
           </div>
         </section>
 
