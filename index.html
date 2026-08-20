@@ -112,10 +112,16 @@
           opacity: 0.25;
         }
       }
+      /* KRİTİK: hidden niteliği, yukarıdaki display:flex kurallarına yenilmesin */
+      #boot-error[hidden],
+      #boot-splash[hidden] {
+        display: none !important;
+      }
     </style>
     <script>
       /* Açılışta oluşan HER hatayı görünür yap — beyaz ekran kalmasın */
       window.__bootErrors = [];
+      window.__bootStage = "inline-script";
       window.addEventListener("error", function (e) {
         window.__bootErrors.push(
           (e && e.message ? e.message : "Bilinmeyen hata") +
