@@ -1,2 +1,2 @@
 # HARFLER
-Modern Yılan Oyunu Tasarımı
+HARFLER Oyunu Tasarımı
