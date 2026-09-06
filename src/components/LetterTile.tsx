@@ -8,6 +8,8 @@ interface LetterTileProps {
   state?: TileState;
   badge?: number;
   sub?: string;
+  /** Verilirse alt etiket (örnek kelime) kendi düğmesi olur ve yalnızca onu söyler. */
+  onSubClick?: () => void;
   className?: string;
   onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
 }
@@ -24,6 +26,7 @@ export function LetterTile({
   state = "idle",
   badge,
   sub,
+  onSubClick,
   className = "",
   onClick,
 }: LetterTileProps) {
@@ -42,7 +45,11 @@ export function LetterTile({
         type="button"
         onClick={onClick}
         disabled={!onClick || state === "locked"}
-        aria-label={`${letter.char} harfi${sub ? ", " + sub : ""}`}
+        aria-label={
+          onSubClick
+            ? `${letter.char} harfinin sesi`
+            : `${letter.char} harfi${sub ? ", " + sub : ""}`
+        }
         className={`
           relative sticker font-display font-semibold leading-none flex items-center justify-center
           transition-transform duration-150 select-none
@@ -58,7 +65,19 @@ export function LetterTile({
           </span>
         )}
       </button>
-      {sub && <span className="font-display font-medium text-ink-soft text-sm sm:text-base">{sub}</span>}
+      {sub &&
+        (onSubClick ? (
+          <button
+            type="button"
+            onClick={onSubClick}
+            aria-label={`${sub} kelimesini dinle`}
+            className="btn-toy font-display font-medium text-ink-soft text-sm sm:text-base rounded-lg px-2 py-0.5 hover:text-ink hover:bg-mint-deep"
+          >
+            {sub}
+          </button>
+        ) : (
+          <span className="font-display font-medium text-ink-soft text-sm sm:text-base">{sub}</span>
+        ))}
     </div>
   );
 }

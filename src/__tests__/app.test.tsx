@@ -115,12 +115,17 @@ describe("App", () => {
     expect(localStorage.getItem("ses-avi-sessiz")).toBe("1");
   });
 
-  it("harf kutusuna dokununca o harfin sesi okunur", async () => {
+  it("harfe dokununca yalnızca ses, kelimeye dokununca yalnızca kelime okunur", async () => {
     render(<App />);
     clearSpokenTexts();
-    fireEvent.click(screen.getByRole("button", { name: /N harfi, nane/ }));
+    fireEvent.click(screen.getByRole("button", { name: "N harfinin sesi" }));
     await tick(100);
-    expect(getSpokenTexts().some((t) => t.includes("nane"))).toBe(true);
+    expect(getSpokenTexts(), "harf kutusu gereksiz metin okudu").toEqual(["ne"]);
+
+    clearSpokenTexts();
+    fireEvent.click(screen.getByRole("button", { name: "nane kelimesini dinle" }));
+    await tick(100);
+    expect(getSpokenTexts(), "kelime düğmesi gereksiz metin okudu").toEqual(["nane"]);
   });
 
   it("kelime bahçesindeki kelime okunur", async () => {

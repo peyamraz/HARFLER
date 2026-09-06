@@ -160,8 +160,8 @@ export function useSoundGame(group: GroupDef) {
       answeredIn: null,
     }));
     sfx.listen();
-    say(`Sıra ${n}. seste. Kulaklar hazır mı? Dinle: ${target.say}`, {
-      rate: 0.82,
+    say(`Dinle: ${target.say}`, {
+      rate: 0.8,
       onEnd: () => {
         const r = runRef.current;
         if (r.status !== "playing" || r.round !== n) return;
@@ -258,9 +258,7 @@ export function useSoundGame(group: GroupDef) {
         }
         if (hot) sfx.sparkle();
         else sfx.correct();
-        say(`${letter.say} sesi, ${letter.char} harfi. Dinle ve tekrar et: ${letter.say}!`, {
-          rate: 0.8,
-        });
+        say(letter.say, { rate: 0.78 });
         setRun((cur) => ({
           ...cur,
           status: "feedback",
@@ -292,7 +290,7 @@ export function useSoundGame(group: GroupDef) {
     if (r.status !== "answer" || !r.target) return;
     cancelSpeech();
     sfx.wrong();
-    say(`Süre doldu! Doğru ses ${r.target.say} idi. Dinle: ${r.target.say}`, { rate: 0.8 });
+    say(`Doğru ses: ${r.target.say}`, { rate: 0.8 });
     setRun((cur) => ({
       ...cur,
       status: "feedback",

@@ -69,8 +69,17 @@ describe("etkinlik taraması", () => {
       (t) => !t.trim() || /undefined|NaN|\[object |null/.test(t) || t.length > 200,
     );
 
+    // Gereksiz/geveze söylemler ve kesilmeye açık uzun cümleler yasak.
+    const NOISE = [/\u00f6rnek:/i, /kulaklar haz\u0131r/i, /haz\u0131r m\u0131/i, /sesi, .* harfi/i, /dinle ve tekrar et/i, /s\u00fcre doldu/i];
+    const noisy = [...spoken].filter((t) => NOISE.some((re) => re.test(t)));
+    const tooLong = [...spoken].filter((t) => t.length > 70);
+    const repeated = [...spoken].filter((t) => /^(\S+)\. \1[,.]/.test(t));
+
     expect(problems, problems.join("\n")).toEqual([]);
     expect(badSpeech, badSpeech.join("\n")).toEqual([]);
+    expect(noisy, "gereksiz söylem: " + noisy.join(" | ")).toEqual([]);
+    expect(tooLong, "kesilmeye açık uzun söylem: " + tooLong.join(" | ")).toEqual([]);
+    expect(repeated, "kelime iki kez söyleniyor: " + repeated.join(" | ")).toEqual([]);
     expect(spoken.size).toBeGreaterThan(50);
   }, 180000);
 });

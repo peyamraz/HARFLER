@@ -231,7 +231,7 @@ export default function App() {
         window.setTimeout(() => {
           setHeroIdx(i);
           sfx.listen();
-          say(`${l.say}. örnek: ${l.word}`, { rate: 0.85 });
+          say(`${l.say}. ${l.word}`, { rate: 0.85 });
           if (i === group.letters.length - 1) {
             clearSequence();
             setSeqPlaying(false);
@@ -545,7 +545,11 @@ export default function App() {
                       sub={l.word}
                       onClick={() => {
                         sfx.listen();
-                        say(`${l.say}. ${l.char}. örnek: ${l.word}`, { rate: 0.82 });
+                        say(l.say, { rate: 0.8 });
+                      }}
+                      onSubClick={() => {
+                        sfx.listen();
+                        say(l.word, { rate: 0.8 });
                       }}
                     />
                   ))}

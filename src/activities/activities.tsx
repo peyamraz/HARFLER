@@ -204,7 +204,7 @@ function InitialSound({ group, onExit, onComplete }: ActivityProps) {
     setChosen(l.id);
     if (l.id === q.answer.id) {
       sfx.correct();
-      say(`${q.word}. ${q.word}, ${l.say} sesiyle başlar.`, { rate: 0.85 });
+      say(`${q.word}. ${l.say} sesiyle başlar.`, { rate: 0.85 });
       eng.settle(true, `Evet! "${q.word}", ${l.char} ile başlar.`, "");
     } else {
       eng.settle(false, "", `"${q.word}", ${q.answer.char} harfiyle başlıyor.`);
@@ -275,7 +275,7 @@ function FinalSound({ group, onExit, onComplete }: ActivityProps) {
     setChosen(l.id);
     if (l.id === q.answer.id) {
       sfx.correct();
-      say(`${q.word}. ${q.word}, ${l.say} sesiyle biter.`, { rate: 0.85 });
+      say(`${q.word}. ${l.say} sesiyle biter.`, { rate: 0.85 });
       eng.settle(true, `Evet! "${q.word}", ${l.char} ile biter.`, "");
     } else {
       eng.settle(false, "", `"${q.word}", ${q.answer.char} harfiyle bitiyor.`);

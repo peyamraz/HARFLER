@@ -1,6 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GROUPS } from "../letters";
+import { clearSpokenTexts, getSpokenTexts } from "../../test/setup";
 import { REMEMBER_SECONDS, TOTAL_ROUNDS, useSoundGame } from "../useSoundGame";
 
 /** Test konuşma motorunun zamanlaması: 90 ms gecikme + 300 ms konuşma. */
@@ -29,6 +30,34 @@ function nextToAnswer(hook: { current: ReturnType<typeof useSoundGame> }) {
 }
 
 describe("useSoundGame", () => {
+  /* ---- söylemler kısa ve tek işli olmalı (uzun cümleler kesiliyor) ---- */
+  it("tur söylemi yalnızca 'Dinle: <ses>' — gereksiz giriş yok", () => {
+    const { result } = renderHook(() => useSoundGame(GROUPS[0]));
+    clearSpokenTexts();
+    act(() => result.current.startGame());
+    act(() => void vi.advanceTimersByTime(400 + SPEECH_FLOW_MS)); // playRound(1) + sesin kaydı
+
+    const texts = getSpokenTexts();
+    expect(texts, "tur başında birden çok söylem var").toHaveLength(1);
+    expect(texts[0]).toBe(`Dinle: ${result.current.target!.say}`);
+    expect(texts[0]).not.toMatch(/kulaklar|s\u0131ra|\u00f6rnek|haz\u0131r m\u0131/i);
+  });
+
+  it("doğru cevapta yalnızca harfin sesi okunur", () => {
+    const { result } = renderHook(() => useSoundGame(GROUPS[0]));
+    act(() => result.current.startGame());
+    act(() => void vi.advanceTimersByTime(400));
+    act(() => void vi.advanceTimersByTime(SPEECH_FLOW_MS));
+    act(() => void vi.advanceTimersByTime(COUNTDOWN_MS));
+
+    const target = result.current.target!;
+    clearSpokenTexts();
+    act(() => result.current.pick(target, undefined));
+    act(() => void vi.advanceTimersByTime(SPEECH_FLOW_MS));
+
+    expect(getSpokenTexts()).toEqual([target.say]);
+  });
+
   beforeEach(() => {
     vi.useFakeTimers();
     localStorage.clear();

@@ -94,9 +94,23 @@ karakterleri yanlış yorumlayabiliyor. ZIP ise `src/game/zip.ts` içindeki bağ
 
 Komut satırından paket almak için: `npm run pack`.
 
+## Seslendirme ilkeleri
+
+Konuşmalar **kısa ve tek işli** tutulur; uzun cümleler cihaz ses motorlarında
+kesiliyor ve çocuk söylenenin sonunu duyamıyor.
+
+- Bir dokunuş = bir bilgi. Harf kutusunda harfe dokununca yalnızca ses (`a`),
+  altındaki kelimeye dokununca yalnızca kelime (`arı`) okunur.
+- Meta kelimeler söylenmez: `örnek:`, `Kulaklar hazır mı?`, `Sıra 1. seste.`,
+  `Dinle ve tekrar et:` gibi girişler kaldırıldı; tur söylemi yalnızca `Dinle: te`.
+- Aynı kelime bir söylemde iki kez tekrarlanmaz (`arı. arı, a sesiyle başlar.` →
+  `arı. a sesiyle başlar.`).
+- Her söylem 70 karakteri aşmaz. `scan.test.tsx` bu üç kuralı 65 kombinasyonda
+  otomatik denetler; `useSoundGame.test.tsx` tur söylemini birebir kilitler.
+
 ## Testler
 
-`npm test` — 98 test: puan kuralları, ses grubu verisinin bütünlüğü, hece/harf sayacı,
+`npm test` — 100 test: puan kuralları, ses grubu verisinin bütünlüğü, hece/harf sayacı,
 tur motoru, `useSoundGame` tur akışı (sahte zamanlayıcı ve taklit ses motoruyla),
 konuşma katmanı (Türkçe ses yokken yabancı ses atanmadığı dahil),
 arayüzden oynanan tam tur, ZIP üreticisi (CRC-32 standart kontrol değeri dahil), İNDİR
