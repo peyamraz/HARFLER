@@ -102,7 +102,7 @@ kesiliyor ve çocuk söylenenin sonunu duyamıyor.
 - Bir dokunuş = bir bilgi. Harf kutusunda harfe dokununca yalnızca ses (`a`),
   altındaki kelimeye dokununca yalnızca kelime (`arı`) okunur.
 - Meta kelimeler söylenmez: `örnek:`, `Kulaklar hazır mı?`, `Sıra 1. seste.`,
-  `Dinle ve tekrar et:` gibi girişler kaldırıldı; tur söylemi yalnızca `Dinle: te`.
+  `Dinle ve tekrar et:` gibi girişler kaldırıldı; tur söylemi yalnızca harfin sesi (`te`); öncesindeki zil zaten "dinle" demek.
 - Aynı kelime bir söylemde iki kez tekrarlanmaz (`arı. arı, a sesiyle başlar.` →
   `arı. a sesiyle başlar.`).
 - Her söylem 70 karakteri aşmaz. `scan.test.tsx` bu üç kuralı 65 kombinasyonda

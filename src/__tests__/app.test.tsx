@@ -7,10 +7,10 @@ import { clearSpokenTexts, getSpokenTexts } from "../test/setup";
 const SPEECH_FLOW_MS = 90 + 300; // test ses motoru: 90 ms gecikme + 300 ms konuşma
 const COUNTDOWN_MS = 5000;
 
-/** Son söylenen "Dinle: X" metninden hedef harfi bulur. */
+/** Son söylenen metin doğrudan hedef sesin kendisidir. */
 function targetFromSpeech() {
-  const prompts = getSpokenTexts().filter((t) => t.includes("Dinle:"));
-  const said = prompts[prompts.length - 1].split("Dinle:")[1].trim();
+  const texts = getSpokenTexts();
+  const said = (texts[texts.length - 1] ?? "").trim();
   const letter = GROUPS[0].letters.find((l) => l.say === said);
   expect(letter, `"${said}" sesi bulunamadı`).toBeTruthy();
   return letter!;

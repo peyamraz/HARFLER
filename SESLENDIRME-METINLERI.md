@@ -19,7 +19,7 @@ Kural: bir dokunuş = bir bilgi, kısa cümle (uzun cümleler cihaz ses motorund
 
 | # | Ne zaman | Söylenen |
 |---|---|---|
-| B1 | Her tur başında | `Dinle: te` |
+| B1 | Her tur başında | sadece ses: `te` (öncesinde zil çalar) |
 | B2 | Doğru harfe dokununca | sadece ses: `te` |
 | B3 | Yanlış harfe dokununca | `Olmadı, tekrar dene!` |
 | B4 | Süre dolunca | `Doğru ses: te` |

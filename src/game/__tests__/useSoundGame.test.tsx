@@ -31,7 +31,7 @@ function nextToAnswer(hook: { current: ReturnType<typeof useSoundGame> }) {
 
 describe("useSoundGame", () => {
   /* ---- söylemler kısa ve tek işli olmalı (uzun cümleler kesiliyor) ---- */
-  it("tur söylemi yalnızca 'Dinle: <ses>' — gereksiz giriş yok", () => {
+  it("tur söylemi yalnızca harfin sesi — komut kelimesi yok", () => {
     const { result } = renderHook(() => useSoundGame(GROUPS[0]));
     clearSpokenTexts();
     act(() => result.current.startGame());
@@ -39,8 +39,10 @@ describe("useSoundGame", () => {
 
     const texts = getSpokenTexts();
     expect(texts, "tur başında birden çok söylem var").toHaveLength(1);
-    expect(texts[0]).toBe(`Dinle: ${result.current.target!.say}`);
-    expect(texts[0]).not.toMatch(/kulaklar|s\u0131ra|\u00f6rnek|haz\u0131r m\u0131/i);
+    expect(texts[0], "tur başında komut kelimesi söylenmemeli").toBe(
+      result.current.target!.say,
+    );
+    expect(texts[0]).not.toMatch(/dinle|kulaklar|s\u0131ra|\u00f6rnek|haz\u0131r m\u0131/i);
   });
 
   it("doğru cevapta yalnızca harfin sesi okunur", () => {

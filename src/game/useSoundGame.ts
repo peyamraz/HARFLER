@@ -160,8 +160,12 @@ export function useSoundGame(group: GroupDef) {
       answeredIn: null,
     }));
     sfx.listen();
-    say(`Dinle: ${target.say}`, {
-      rate: 0.8,
+    // Yalnızca sesin kendisi: "Dinle:" gibi bir komut kelimesi çocukta
+    // "komut mu, ses mi?" karışıklığı yaratıyordu. Zaten öncesinde zil çalıyor
+    // (sfx.listen) ve ekranda "Sesi aklında tut!" yazıyor. Böylece tur başı,
+    // "Sesi tekrar dinle" ve doğru cevap aynı şeyi söylemiş oluyor.
+    say(target.say, {
+      rate: 0.75,
       onEnd: () => {
         const r = runRef.current;
         if (r.status !== "playing" || r.round !== n) return;
