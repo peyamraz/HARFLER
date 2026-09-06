@@ -64,19 +64,30 @@ async function buildStandaloneHtml() {
     return a.type === "asset" ? decode(a.source) : a.code;
   };
 
-  // harici betikleri ve stilleri dosyanın içine taşı
-  html = html.replace(
-    /<script[^>]*\ssrc="([^"]+)"[^>]*>\s*<\/script>/g,
-    (_m, src) => `<script type="module">\n${textOf(src.split("/").pop())}\n</script>`,
-  );
+  // Harici betiği ve stili dosyanın içine taşı.
+  // Betik KLASİK betik olarak <body> sonuna yazılır: file:// üzerinde
+  // modül betikler CORS'a takılabiliyor, klasik betik her yerde çalışır.
+  // (Demet ESM sözdizimi içermez; içerirse bu adım hata fırlatır.)
+  let jsCode = "";
+  html = html.replace(/<script[^>]*\ssrc="([^"]+)"[^>]*>\s*<\/script>/g, (_m, src) => {
+    jsCode = textOf(src.split("/").pop()).replace(/<\/script/gi, "<\\/script");
+    return "";
+  });
+  if (!jsCode) throw new Error("standalone: gömülecek betik bulunamadı");
+
   html = html.replace(
     /<link[^>]*\srel="stylesheet"[^>]*\shref="([^"]+)"[^>]*>/g,
     (_m, href) => `<style>\n${textOf(href.split("/").pop())}\n</style>`,
   );
   html = html.replace(/<link[^>]*\srel="modulepreload"[^>]*>/g, "");
 
+  if (!/<\/body>/i.test(html)) throw new Error("standalone: </body> bulunamadı");
+  // DEĞİŞTİRME FONKSİYONLA yapılır: düz metin verilirse JS içindeki "$&" gibi
+  // diziler replace kalıpları sanılıp HTML parçalarıyla değiştirilir (dosya bozulur).
+  html = html.replace(/<\/body>/i, () => `<script>\n${jsCode}\n</script>\n</body>`);
+
   // file:// üzerinden açılınca göreceli yollar kırılmasın
-  html = html.replace(/<head>/i, '<head>\n<base href="./" />');
+  html = html.replace(/<head>/i, () => '<head>\n<base href="./" />');
 
   return html;
 }

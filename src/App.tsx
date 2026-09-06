@@ -8,6 +8,7 @@ import { LetterTile, type TileState } from "./components/LetterTile";
 import { CountdownRing } from "./components/CountdownRing";
 import { ConfettiLayer, makeBurst, type Burst } from "./components/Confetti";
 import { ActivityCenter, ACTIVITY_COUNT } from "./activities/activities";
+import { GAME_FILE, PACKAGE_NAME, buildPackage } from "./game/package";
 import {
   IconBolt,
   IconBook,
@@ -260,30 +261,47 @@ export default function App() {
     return () => io.disconnect();
   }, []);
 
-  /* ---- tek dosyalık çevrimdışı sürümü indir ---- */
+  /* ---- indir: oyun + .bat başlatıcı + açıklamalar tek ZIP'te ---- */
   const [dlState, setDlState] = useState<"idle" | "busy" | "ok" | "err">("idle");
-  const downloadStandalone = async () => {
+
+  /** Derlenmiş, kendi kendine yeten oyun dosyası sunucudan gelir (vite.config.js). */
+  const fetchStandalone = async (): Promise<string> => {
+    const res = await fetch(new URL("standalone.html", document.baseURI).href, {
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const doc = await res.text();
+    if (!/<script/i.test(doc) || !/<div id="root"/.test(doc)) {
+      throw new Error("Oyun dosyası eksik geldi");
+    }
+    return doc;
+  };
+
+  const saveBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+  };
+
+  const runDownload = async (kind: "paket" | "html") => {
     if (dlState === "busy") return;
     sfx.tap();
     setDlState("busy");
     try {
-      // Derlenmiş, kendi kendine yeten sürüm sunucudan gelir (vite.config.js).
-      const res = await fetch(new URL("standalone.html", document.baseURI).href, {
-        cache: "no-store",
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const doc = await res.text();
-      if (!/<script/i.test(doc)) throw new Error("Dosya boş geldi");
-
-      const blob = new Blob([doc], { type: "text/html;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "harfler-ses-avi.html";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+      const html = await fetchStandalone();
+      if (kind === "paket") {
+        saveBlob(
+          new Blob([buildPackage(html)], { type: "application/zip" }),
+          PACKAGE_NAME,
+        );
+      } else {
+        saveBlob(new Blob([html], { type: "text/html;charset=utf-8" }), GAME_FILE);
+      }
       sfx.win();
       setDlState("ok");
       window.setTimeout(() => setDlState("idle"), 3200);
@@ -335,10 +353,10 @@ export default function App() {
             <StatChip label={`Rekor · ${group.name}`} value={g.record} icon={<IconTrophy className="w-5 h-5 text-coral-deep" />} accent="text-coral-deep" />
             <button
               type="button"
-              onClick={downloadStandalone}
+              onClick={() => runDownload("paket")}
               disabled={dlState === "busy"}
               className="btn-toy sticker-sm rounded-lg bg-ink text-mint px-4 h-11 flex items-center justify-center gap-2 font-display font-bold text-sm"
-              title="Oyunu tek dosya olarak indir (çevrimdışı çalışır)"
+              title="Oyunu indir: ZIP içinde oyun dosyası + .bat başlatıcı + açıklamalar"
             >
               <IconDownload className={`w-5 h-5 ${dlState === "busy" ? "anim-pulse-soft" : ""}`} />
               <span className="hidden sm:inline">
@@ -915,15 +933,16 @@ export default function App() {
                   Oyunu indir, her yerde oyna
                 </h2>
                 <p className="text-ink font-semibold text-sm sm:text-base max-w-lg">
-                  Tek dosyalık <span className="font-black">harfler-ses-avi.html</span> iner. Sınıfta
-                  akıllı tahtada, evde bilgisayarda, internetsiz telefonda bile çift tıklayıp
-                  açarsın. Skorlar cihazda saklanır.
+                  <span className="font-black">HARFLER-Ses-Avi.zip</span> iner: içinde oyun
+                  dosyası, <span className="font-black">çift tıklayınca oyunu açan .bat</span> ve
+                  Türkçe açıklama notu var. Kurulum yok, internet yok, sunucu yok. Sınıfta akıllı
+                  tahtada, evde bilgisayarda çalışır; skorlar cihazda saklanır.
                 </p>
                 <ol className="flex flex-wrap gap-x-6 gap-y-2 mt-4">
                   {[
-                    { ic: <IconDownload className="w-4 h-4" />, t: "İNDİR'e bas" },
-                    { ic: <IconFolder className="w-4 h-4" />, t: "Dosyayı bul" },
-                    { ic: <IconCursor className="w-4 h-4" />, t: "Çift tıkla, oyna!" },
+                    { ic: <IconDownload className="w-4 h-4" />, t: "PAKETİ İNDİR'e bas" },
+                    { ic: <IconFolder className="w-4 h-4" />, t: "ZIP'i çıkart" },
+                    { ic: <IconCursor className="w-4 h-4" />, t: "HARFLER-Ses-Avi.bat → çift tıkla, oyna!" },
                   ].map((s, i) => (
                     <li key={s.t} className="flex items-center gap-2 font-display font-bold text-sm text-ink">
                       <span className="w-7 h-7 rounded-full bg-ink text-amber flex items-center justify-center">
@@ -937,9 +956,9 @@ export default function App() {
               <div className="flex flex-col items-start lg:items-center gap-3">
                 <button
                   type="button"
-                  onClick={downloadStandalone}
+                  onClick={() => runDownload("paket")}
                   disabled={dlState === "busy"}
-                  className={`btn-toy sticker rounded-2xl px-8 py-4 font-display font-bold text-xl inline-flex items-center gap-3 ${
+                  className={`btn-toy sticker rounded-2xl px-7 py-4 font-display font-bold text-lg sm:text-xl inline-flex items-center gap-3 ${
                     dlState === "ok" ? "bg-leaf text-white" : "bg-coral text-white"
                   }`}
                 >
@@ -953,9 +972,18 @@ export default function App() {
                     </>
                   ) : (
                     <>
-                      <IconDownload className="w-6 h-6" /> TEKLİ DOSYAYI İNDİR
+                      <IconDownload className="w-6 h-6" /> PAKETİ İNDİR (ZIP + .bat)
                     </>
                   )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => runDownload("html")}
+                  disabled={dlState === "busy"}
+                  className="btn-toy sticker-sm rounded-xl bg-paper px-5 py-2.5 font-display font-bold text-sm text-ink inline-flex items-center gap-2"
+                  title="Yalnızca oyun dosyasını indir; çift tıklayınca da açılır"
+                >
+                  <IconCursor className="w-4 h-4 text-sky-deep" /> Sadece oyun dosyası (.html)
                 </button>
                 {dlState === "err" && (
                   <p className="font-bold text-sm text-coral-deep bg-white/70 rounded-lg px-3 py-1.5">

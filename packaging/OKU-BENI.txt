@@ -1,0 +1,57 @@
+HARFLER · SES AVI — 1. Sınıf Ses Grubu Oyunu
+============================================
+
+KURULUM YOK. İNTERNET GEREKMEZ. SUNUCU GEREKMEZ.
+
+NASIL OYNANIR?
+--------------
+Windows:
+  1) ZIP dosyasına sağ tık → "Tümünü Çıkart" (masaüstüne çıkartın).
+  2) HARFLER-Ses-Avi.bat dosyasına ÇİFT TIKLAYIN.
+  3) Oyun tarayıcıda açılır. Tam ekran için F11.
+
+Mac / Linux:
+  1) ZIP'i açın.
+  2) HARFLER-Ses-Avi.html dosyasına çift tıklayın.
+
+Tarayıcı açılmazsa: HARFLER-Ses-Avi.html dosyasını Chrome veya Edge
+penceresine sürükleyip bırakmanız yeterli.
+
+ÖNERİ: Akıllı tahtada tam ekran (F11) + ses açık kullanın.
+
+
+NELER VAR?
+----------
+• Ses Blokları: 5 ses grubu (ANETİL, OKURIM, ÜSÖYDZ, ÇBGCŞ, PHVĞFJ — 29 ses).
+  Harfe dokununca kendi sesi ve örnek kelime okunur.
+• Ses Avı: Ana oyun. Ses okunur, 5 saniye akılda tutulur, doğru harfe dokunulur.
+  10 tur. Doğru cevap +10, hızlı cevap +5, 3 ve üzeri seri +5.
+• Etkinlik Merkezi: 13 ayrı oyun (harf sırası, kelime avı, baş/son harf,
+  hece say, kelimeyi diz, hafıza kartları, ses nerede? ...).
+• Kelime Bahçesi: Grubun harfleriyle okunabilen kelimeler ve ilk cümleler.
+
+Puanlar, rekorlar ve yıldızlar bu bilgisayarda saklanır.
+
+
+SES GELMİYORSA
+--------------
+Oyun, cihazın kendi Türkçe konuşma motorunu kullanır (ses dosyası içermez).
+• Chrome veya Edge önerilir (Windows'ta Türkçe ses hazırdır).
+• İlk tıklamadan önce tarayıcılar sesi başlatmayabilir: bir harfe dokunun.
+• Windows'ta Türkçe sesi yoksa: Ayarlar → Saat ve Dil → Dil → Türkçe →
+  Seçenekler → "Karşıdan yükle" (ses paketi).
+• Sekmeyi sessize almadığınızdan ve sistem sesinin açık olduğundan emin olun.
+  Sağ üstteki hoparlör düğmesi oyunun sesini açıp kapatır.
+
+
+SIK SORULANLAR
+--------------
+• İnternet gerekli mi? Hayır. Yalnızca yazı tipleri ilk açılışta internetten
+  gelir; yoksa oyun yedek yazı tipiyle yine çalışır.
+• Virüs uyarısı çıkarsa? Dosya yalnızca metin içerir (HTML + bu notlar).
+  Okul bilişim sistemleri .bat dosyalarını engelleyebilir; o zaman
+  HARFLER-Ses-Avi.html dosyasını doğrudan çift tıklayın.
+• Puanları sıfırlamak için? Tarayıcı geçmişini/verilerini temizleyin ya da
+  oyunu başka bir tarayıcıda açın.
+
+Maarif Modeli 2026-2027 · 1. sınıf ilk okuma-yazma

@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:standalone": "vite build && vitest run src/__tests__/standalone.test.ts",
-    "check": "npm run typecheck && npm run test && npm run build && vitest run src/__tests__/standalone.test.ts"
+    "pack": "vite build && vite-node scripts/make-package.ts",
+    "check": "npm run typecheck && npm run build && npm run test && vite-node scripts/make-package.ts"
   },
   "dependencies": {
     "react": "^18.2.0",

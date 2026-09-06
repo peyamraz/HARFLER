@@ -9,26 +9,45 @@ import { describe, expect, it } from "vitest";
  */
 const FILE = resolve(process.cwd(), "dist/standalone.html");
 
+/** Gömülü klasik betiği çıkarır. */
+function embeddedScript(html: string): string {
+  const m = html.match(/<script>\n([\s\S]*?)\n<\/script>/);
+  expect(m, "gömülü betik bulunamadı").toBeTruthy();
+  return m![1];
+}
+
 describe.skipIf(!existsSync(FILE))("dist/standalone.html", () => {
+  const html = existsSync(FILE) ? readFileSync(FILE, "utf8") : "";
+
   it("kendi kendine yeter: harici betik/stil referansı yoktur", () => {
-    const html = readFileSync(FILE, "utf8");
     expect(html).toContain('<div id="root">');
     expect(/<script[^>]*\ssrc="/.test(html), "harici betik kalmış").toBe(false);
     expect(
       /<link[^>]*rel="stylesheet"[^>]*href="\/?assets/.test(html),
       "harici stil kalmış",
     ).toBe(false);
-    expect(html).toContain("<script type=\"module\">");
+  });
+
+  it("file:// için güvenli: klasik betik, root'tan sonra gelir", () => {
+    // Modül betikler file:// üzerinde CORS'a takılabilir; klasik betik her yerde çalışır.
+    expect(html).not.toContain('<script type="module"');
+    expect(html.indexOf("<script>"), "betik #root'tan önce").toBeGreaterThan(
+      html.indexOf('<div id="root">'),
+    );
+    expect(html.trimEnd().endsWith("</html>")).toBe(true);
+  });
+
+  it("gömülü betik modül sözdizimi içermez (klasik betik olarak çalışabilir)", async () => {
+    const code = embeddedScript(html);
+    const vm = await import("node:vm");
+    // import/export kalmışsa SyntaxError fırlatır
+    expect(() => new vm.Script(code)).not.toThrow();
   });
 
   it("gömülü betik çalışıp uygulamayı render eder", async () => {
-    const html = readFileSync(FILE, "utf8");
-    const m = html.match(/<script type="module">\n([\s\S]*?)\n<\/script>/);
-    expect(m, "satır içi modül bulunamadı").toBeTruthy();
-
+    const code = embeddedScript(html);
     document.body.innerHTML = '<div id="root"></div>';
-    const url =
-      "data:text/javascript;base64," + Buffer.from(m![1], "utf8").toString("base64");
+    const url = "data:text/javascript;base64," + Buffer.from(code, "utf8").toString("base64");
     await import(/* @vite-ignore */ url);
     await new Promise((r) => setTimeout(r, 50));
 
@@ -37,5 +56,6 @@ describe.skipIf(!existsSync(FILE))("dist/standalone.html", () => {
     expect(root.textContent).toContain("Ses Avı");
     expect(root.textContent).toContain("Oyunu Başlat");
     expect(root.textContent).toContain("Etkinlik Merkezi");
+    expect(root.textContent).toContain("PAKETİ İNDİR");
   }, 30000);
 });
