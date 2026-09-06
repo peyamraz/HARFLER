@@ -91,11 +91,18 @@ Komut satırından paket almak için: `npm run pack`.
 
 ## Testler
 
-`npm test` — 80 test: puan kuralları, ses grubu verisinin bütünlüğü, hece/harf sayacı,
+`npm test` — 97 test: puan kuralları, ses grubu verisinin bütünlüğü, hece/harf sayacı,
 tur motoru, `useSoundGame` tur akışı (sahte zamanlayıcı ve taklit ses motoruyla),
+konuşma katmanı (Türkçe ses yokken yabancı ses atanmadığı dahil),
 arayüzden oynanan tam tur, ZIP üreticisi (CRC-32 standart kontrol değeri dahil), İNDİR
 düğmesinin gerçekten ZIP indirdiği ve indirilen tek dosyanın çalışıp render olduğuna dair
 sağlama.
+
+Ayrıca **5 grup × 13 etkinlik = 65 kombinasyonun tümü** otomatik taranır: hiçbir etkinlik
+karttan açılışta çökmez, hata ekranı devreye girmez ve konuşulan metinlerde `undefined`
+gibi bozuk parça bulunmaz. Sıralı/hafızalı dört etkinlik (Harf Sırası, Harf Izgarası,
+Kelimeyi Diz, Hafıza Kartları) gerçek çözücülerle **sonuna kadar oynanıp**
+tamamlanabildikleri kanıtlanır.
 
 Konuşma sentezi taklidi `src/test/setup.ts` içindedir; gerçek Chrome gibi `cancel()`
 çağrısında `onend` tetikler, böylece oyun durdurma sırasındaki yarışlar da test edilir.

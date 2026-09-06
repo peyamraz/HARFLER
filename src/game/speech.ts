@@ -17,13 +17,16 @@ export interface VoiceState {
   ready: boolean;
   /** Türkçe bir ses bulundu mu? */
   turkish: boolean;
+  /** Kullanılacak sesin adı (tanı koymak için arayüzde gösterilir). */
+  name: string | null;
 }
 
 type Listener = (s: VoiceState) => void;
 const listeners = new Set<Listener>();
 
 function currentState(): VoiceState {
-  return { supported, ready: voiceKnown, turkish: trVoice !== null && isTurkish(trVoice) };
+  const turkish = trVoice !== null && isTurkish(trVoice);
+  return { supported, ready: voiceKnown, turkish, name: turkish ? trVoice!.name : null };
 }
 
 function notify() {
@@ -39,17 +42,26 @@ function pickVoice() {
   if (!supported) return;
   const voices = window.speechSynthesis.getVoices();
   if (voices.length > 0) voiceKnown = true;
+  // YALNIZCA Türkçe ses atanır: Türkçe olmayan bir ses (ör. İngilizce) Türkçe
+  // metne verilirse kelimeler yanlış telaffuzla okunur. Türkçe ses yoksa voice
+  // alanı boş bırakılır, tarayıcı u.lang = "tr-TR" ile kendi seçsin.
   trVoice = voices.find(isTurkish) ?? null;
-  if (!trVoice) trVoice = voices.find((v) => v.default) ?? voices[0] ?? null;
   notify();
 }
 
 if (supported) {
   pickVoice();
   window.speechSynthesis.onvoiceschanged = pickVoice;
-  // Chrome uzun konuşmaları gizlice duraklatabilir; düzenli devam ettir.
+  // Chrome uzun konuşmaları gizlice duraklatabilir. Yalnızca gerçekten
+  // durakladıysa devam ettir: konuşurken resume() bazı tarayıcılarda
+  // cümlenin başa sarmasına/takılmasına yol açabiliyor.
   window.setInterval(() => {
-    if (!muted && window.speechSynthesis.speaking) window.speechSynthesis.resume();
+    if (muted) return;
+    try {
+      if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+    } catch {
+      /* yoksay */
+    }
   }, 3500);
 }
 

@@ -1062,7 +1062,7 @@ function PositionAct({ group, onExit, onComplete }: ActivityProps) {
 /* KATALOG + MERKEZ                                                    */
 /* ================================================================== */
 
-interface ActivityMeta {
+export interface ActivityMeta {
   id: string;
   name: string;
   skill: string;
@@ -1073,7 +1073,7 @@ interface ActivityMeta {
   comp: FC<ActivityProps>;
 }
 
-const ACTIVITIES: ActivityMeta[] = [
+export const ACTIVITIES: ActivityMeta[] = [
   { id: "order", name: "Harf Sırası", skill: "Sıralama", desc: "Harfleri öğrenme sırasına göre diz.", rounds: 6, hue: "#ff6b6b", icon: <IconBook className="w-6 h-6" />, comp: OrderRace },
   { id: "word-hunt", name: "Kelime Avı", skill: "Dinleme", desc: "Duyduğun kelimeyi dört seçenek arasında yakala.", rounds: 8, hue: "#4d96ff", icon: <IconEar className="w-6 h-6" />, comp: WordHunt },
   { id: "initial", name: "Baş Harf", skill: "Ses–Harf", desc: "Kelimenin ilk sesi hangi harf?", rounds: 8, hue: "#6bcb77", icon: <IconSpeaker className="w-6 h-6" />, comp: InitialSound },
@@ -1123,13 +1123,22 @@ class ActivityBoundary extends Component<{ onExit: () => void; children: ReactNo
             Bu etkinlik beklenmedik bir hata verdi. Listeye dönüp tekrar deneyebilirsin.
           </p>
           <p className="text-[12px] text-coral-deep font-bold mb-5 break-all">{this.state.msg}</p>
-          <button
-            type="button"
-            onClick={this.props.onExit}
-            className="btn-toy sticker-sm rounded-xl bg-sky text-white px-6 py-3 font-display font-bold inline-flex items-center gap-2"
-          >
-            <IconX className="w-5 h-5" /> Etkinlik Listesine Dön
-          </button>
+          <div className="flex items-center justify-center gap-3 flex-wrap">
+            <button
+              type="button"
+              onClick={() => this.setState({ failed: false, msg: "" })}
+              className="btn-toy sticker-sm rounded-xl bg-leaf text-white px-6 py-3 font-display font-bold inline-flex items-center gap-2"
+            >
+              <IconSparkle className="w-5 h-5" /> Tekrar Dene
+            </button>
+            <button
+              type="button"
+              onClick={this.props.onExit}
+              className="btn-toy sticker-sm rounded-xl bg-sky text-white px-6 py-3 font-display font-bold inline-flex items-center gap-2"
+            >
+              <IconX className="w-5 h-5" /> Etkinlik Listesine Dön
+            </button>
+          </div>
         </div>
       );
     }
@@ -1145,6 +1154,8 @@ export function ActivityCenter({
   onPoints: (n: number) => void;
 }) {
   const [active, setActive] = useState<ActivityMeta | null>(null);
+  /** Her açılışta artar: aynı etkinlik yeniden girildiğinde taze örnek kurulur. */
+  const [attempt, setAttempt] = useState(0);
   const [best, setBest] = useState<Record<string, number>>(() => loadBest(group.id));
   const firstRun = useRef(true);
 
@@ -1174,7 +1185,10 @@ export function ActivityCenter({
   if (active) {
     const C = active.comp;
     return (
-      <ActivityBoundary key={`${group.id}-${active.id}`} onExit={() => setActive(null)}>
+      <ActivityBoundary
+        key={`${group.id}-${active.id}-${attempt}`}
+        onExit={() => setActive(null)}
+      >
         <C
           group={group}
           onExit={() => setActive(null)}
@@ -1195,6 +1209,7 @@ export function ActivityCenter({
             onClick={() => {
               sfx.tap();
               setActive(a);
+              setAttempt((n) => n + 1);
             }}
             className="sticker rounded-2xl bg-paper text-left p-4 pt-3 btn-toy transition-transform hover:-translate-y-1 overflow-hidden"
           >

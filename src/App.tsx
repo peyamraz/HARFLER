@@ -241,6 +241,12 @@ export default function App() {
     });
   };
 
+  /** Ses denemesi: hangi sesin konuştuğunu öğretmen duysun. */
+  const testVoice = () => {
+    sfx.listen();
+    say("Ses denemesi. A, anne, nane, anneanne.", { rate: 0.8 });
+  };
+
   /* gezinme çubuğu: görünür bölümü vurgula */
   const [activeSection, setActiveSection] = useState(NAV[0].id);
   useEffect(() => {
@@ -376,10 +382,34 @@ export default function App() {
         </header>
 
         {voice.supported && voice.ready && !voice.turkish && (
-          <div className="sticker-sm rounded-xl bg-amber/40 px-4 py-2.5 text-sm font-semibold text-ink mb-4">
-            Tarayıcında Türkçe ses bulunamadı; kelimeler varsayılan sesle okunur. Doğru telaffuz
-            için Chrome veya Edge önerilir.
+          <div className="sticker-sm rounded-xl bg-coral/25 px-4 py-3 text-sm font-semibold text-ink mb-4 flex items-start gap-3 flex-wrap">
+            <span className="font-display font-bold text-coral-deep shrink-0">Türkçe ses yok</span>
+            <span className="flex-1 min-w-[240px]">
+              Bu cihazda Türkçe konuşma sesi bulunamadı; kelimeler yabancı bir sesle ve yanlış
+              telaffuzla okunur. Windows: <b>Ayarlar → Saat ve Dil → Dil → Türkçe → Seçenekler →
+              Ses</b> bölümünden Türkçe ses paketini indirin, sonra sayfayı yenileyin.
+            </span>
+            <button
+              type="button"
+              onClick={testVoice}
+              className="btn-toy sticker-sm rounded-lg bg-paper px-3 py-1.5 font-display font-bold text-xs text-ink inline-flex items-center gap-1.5"
+            >
+              <IconSpeaker className="w-4 h-4 text-sky-deep" /> Sesi dene
+            </button>
           </div>
+        )}
+        {voice.supported && voice.turkish && (
+          <p className="text-[11px] font-bold text-ink-soft mb-4 inline-flex items-center gap-2 flex-wrap">
+            <IconCheck className="w-4 h-4 text-leaf-deep" /> Türkçe ses hazır
+            <span className="text-ink-soft/80">({voice.name})</span>
+            <button
+              type="button"
+              onClick={testVoice}
+              className="btn-toy sticker-sm rounded-lg bg-paper px-2.5 py-1 font-display font-bold text-[11px] text-ink inline-flex items-center gap-1.5"
+            >
+              <IconSpeaker className="w-3.5 h-3.5 text-sky-deep" /> Sesi dene
+            </button>
+          </p>
         )}
         {!voice.supported && (
           <div className="sticker-sm rounded-xl bg-amber/40 px-4 py-2.5 text-sm font-semibold text-ink mb-4">

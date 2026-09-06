@@ -25,6 +25,28 @@ let currentUtterance: MockUtterance | null = null;
 let speakTimer: ReturnType<typeof setTimeout> | null = null;
 const spoken: string[] = [];
 
+/** Son söylenen utterance'lar (ses/lang denetimi için). */
+export interface SpokenUtterance {
+  text: string;
+  lang: string;
+  voiceLang: string | null;
+}
+const utterances: SpokenUtterance[] = [];
+
+export function getUtterances(): SpokenUtterance[] {
+  return utterances;
+}
+
+/** Taklit ses listesini değiştirir (Türkçe ses yok senaryosu için). */
+export function setMockVoices(list: { name: string; lang: string; default?: boolean }[]): void {
+  mockVoices = list;
+  synth.onvoiceschanged?.();
+}
+
+let mockVoices: { name: string; lang: string; default?: boolean }[] = [
+  { name: "Türkçe Test Sesi", lang: "tr-TR", default: true },
+];
+
 /** Testlerin "ne söylendi?" diye bakabilmesi için. */
 export function getSpokenTexts(): string[] {
   return spoken;
@@ -32,18 +54,29 @@ export function getSpokenTexts(): string[] {
 
 export function clearSpokenTexts(): void {
   spoken.length = 0;
+  utterances.length = 0;
 }
+
+const onvoiceschangedRef: { value: (() => void) | null } = { value: null };
 
 const synth = {
   speaking: false,
   paused: false,
   pending: false,
-  onvoiceschanged: null as null | (() => void),
-  getVoices: () => [
-    { name: "Türkçe Test Sesi", lang: "tr-TR", default: true, voiceURI: "tr-TR-test" },
-  ],
+  getVoices: () => mockVoices.map((v) => ({ ...v, voiceURI: v.lang })),
+  get onvoiceschanged() {
+    return onvoiceschangedRef.value;
+  },
+  set onvoiceschanged(fn: (() => void) | null) {
+    onvoiceschangedRef.value = fn;
+  },
   speak(u: MockUtterance) {
     spoken.push(u.text);
+    utterances.push({
+      text: u.text,
+      lang: u.lang,
+      voiceLang: u.voice ? (u.voice as { lang: string }).lang : null,
+    });
     currentUtterance = u;
     this.speaking = true;
     speakTimer = setTimeout(() => {

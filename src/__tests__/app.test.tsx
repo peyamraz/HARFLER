@@ -130,6 +130,17 @@ describe("App", () => {
     await tick(100);
     expect(getSpokenTexts().at(-1)).toBe("anneanne");
   });
+
+  it("Türkçe ses hazır olduğunu bildirir ve 'Sesi dene' test cümlesini okutur", async () => {
+    render(<App />);
+    await tick(50);
+    expect(screen.getByText("Türkçe ses hazır")).toBeTruthy();
+
+    clearSpokenTexts();
+    fireEvent.click(screen.getByRole("button", { name: /Sesi dene/ }));
+    await tick(200);
+    expect(getSpokenTexts().some((t) => t.startsWith("Ses denemesi."))).toBe(true);
+  });
 });
 
 /* ------------------------------------------------ indirme akışı ---- */
