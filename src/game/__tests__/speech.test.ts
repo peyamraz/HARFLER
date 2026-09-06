@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   cancelSpeech,
+  getTurkishVoices,
   getVoiceState,
   isSpeechSupported,
   onVoiceStateChange,
   say,
   setMuted,
+  setPreferredVoice,
 } from "../speech";
 import { clearSpokenTexts, getUtterances, setMockVoices } from "../../test/setup";
 
@@ -15,6 +17,7 @@ const flush = (ms = 150) => vi.advanceTimersByTime(ms);
 describe("speech", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    localStorage.clear();
     clearSpokenTexts();
     setMockVoices([{ name: "Türkçe Test Sesi", lang: "tr-TR", default: true }]);
     setMuted(false);
@@ -66,6 +69,49 @@ describe("speech", () => {
     off();
     expect(seen.at(-1)).toBe(true);
     expect(getVoiceState().name).toBe("Microsoft Tolga");
+  });
+
+  it("birden çok Türkçe ses varsa en kalitelisi seçilir", () => {
+    setMockVoices([
+      { name: "Microsoft Tolga - Turkish (Turkey)", lang: "tr-TR" },
+      { name: "Google Türkçe", lang: "tr-TR" },
+    ]);
+    expect(getVoiceState().name, "düşük kaliteli SAPI sesi seçilmiş").toBe("Google Türkçe");
+    // sıralama arayüzdeki seçiciye de yansır
+    expect(getTurkishVoices().map((v) => v.name)).toEqual(["Google Türkçe", "Microsoft Tolga - Turkish (Turkey)"]);
+  });
+
+  it("öğretmen sesi elle seçebilir ve otomatik seçime dönebilir", () => {
+    setMockVoices([
+      { name: "Google Türkçe", lang: "tr-TR" },
+      { name: "Microsoft Tolga", lang: "tr-TR" },
+    ]);
+    setPreferredVoice("Microsoft Tolga");
+    expect(getVoiceState().name).toBe("Microsoft Tolga");
+
+    setPreferredVoice(null);
+    expect(getVoiceState().name, "otomatik seçime dönülmedi").toBe("Google Türkçe");
+  });
+
+  it("konuşma hiç başlamazsa bir kez daha denenir (Chrome sessizce yutuyor)", () => {
+    const synth = window.speechSynthesis;
+    const original = synth.speak;
+    let calls = 0;
+    // speak() hiçbir şey başlatmıyor: speaking false kalıyor
+    (synth as unknown as { speak: () => void }).speak = () => {
+      calls += 1;
+    };
+    try {
+      say("anne");
+      vi.advanceTimersByTime(90); // ilk speak
+      expect(calls).toBe(1);
+      vi.advanceTimersByTime(300); // başlama denetimi
+      expect(calls, "tekrar denenmedi").toBe(2);
+      vi.advanceTimersByTime(2000);
+      expect(calls, "birden çok kez tekrar denendi").toBe(2);
+    } finally {
+      (synth as unknown as { speak: typeof original }).speak = original;
+    }
   });
 
   it("sessize alınınca konuşma başlamaz", () => {

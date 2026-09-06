@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 import { GROUPS } from "../game/letters";
-import { clearSpokenTexts, getSpokenTexts } from "../test/setup";
+import { clearSpokenTexts, getSpokenTexts, setMockVoices } from "../test/setup";
 
 const SPEECH_FLOW_MS = 90 + 300; // test ses motoru: 90 ms gecikme + 300 ms konuşma
 const COUNTDOWN_MS = 5000;
@@ -125,6 +125,29 @@ describe("App", () => {
     // sayfanın en sonundaki öge olmalı
     const last = footer.parentElement!.lastElementChild;
     expect(last, "footer son öge değil").toBe(footer);
+  });
+
+  it("birden çok Türkçe ses varsa ses seçici görünür ve seçimi uygular", async () => {
+    setMockVoices([
+      { name: "Microsoft Tolga - Turkish (Turkey)", lang: "tr-TR" },
+      { name: "Google Türkçe", lang: "tr-TR" },
+    ]);
+    render(<App />);
+    await tick(50);
+
+    const select = screen.getByLabelText("Konuşma sesini seç") as HTMLSelectElement;
+    // en kaliteli ses seçili gelir
+    expect(select.value).toBe("Google Türkçe");
+
+    clearSpokenTexts();
+    fireEvent.change(select, { target: { value: "Microsoft Tolga - Turkish (Turkey)" } });
+    await tick(400);
+    // seçilen ses hemen deneme cümlesiyle duyurulur
+    expect(getSpokenTexts().some((t) => t.startsWith("Ses denemesi:"))).toBe(true);
+    expect((screen.getByLabelText("Konuşma sesini seç") as HTMLSelectElement).value).toBe(
+      "Microsoft Tolga - Turkish (Turkey)",
+    );
+    setMockVoices([{ name: "Türkçe Test Sesi", lang: "tr-TR", default: true }]);
   });
 
   it("harfe dokununca yalnızca ses, kelimeye dokununca yalnızca kelime okunur", async () => {

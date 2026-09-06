@@ -38,6 +38,46 @@ function isTurkish(v: SpeechSynthesisVoice): boolean {
   return !!v.lang && v.lang.toLowerCase().replace("_", "-").startsWith("tr");
 }
 
+const PREF_KEY = "harfler-ses-tercihi";
+
+function readPref(): string | null {
+  try {
+    return localStorage.getItem(PREF_KEY);
+  } catch {
+    return null;
+  }
+}
+function writePref(name: string | null): void {
+  try {
+    if (name) localStorage.setItem(PREF_KEY, name);
+    else localStorage.removeItem(PREF_KEY);
+  } catch {
+    /* depolama kapalıysa tercih oturumluk kalır */
+  }
+}
+
+/**
+ * Türkçe sesler arasında kalite sıralaması. Aynı cihazda birden çok Türkçe ses
+ * olabiliyor ve aralarında ciddi fark var: Chrome'un çevrimiçi (Google) sesi ve
+ * "Natural/Neural" adlı sesler, eski Windows SAPI seslerinden çok daha anlaşılır.
+ * Çocuk "net gelmiyor" diyorsa genelde neden düşük kaliteli sesin seçilmesidir.
+ */
+function voiceScore(v: SpeechSynthesisVoice): number {
+  const name = (v.name ?? "").toLowerCase();
+  const lang = (v.lang ?? "").toLowerCase().replace("_", "-");
+  let score = 0;
+  if (lang === "tr-tr") score += 4;
+  else if (lang.startsWith("tr")) score += 2;
+  if (name.includes("google")) score += 6;
+  if (/(natural|neural|online|premium|enhanced|studio)/.test(name)) score += 5;
+  if (v.localService === false) score += 3; // ağ üzerinden gelen motor
+  if (/(sapi|microsoft)/.test(name)) score -= 2; // eski Windows sesleri robotik
+  if (v.default) score += 1;
+  return score;
+}
+
+let allTurkish: SpeechSynthesisVoice[] = [];
+
 function pickVoice() {
   if (!supported) return;
   const voices = window.speechSynthesis.getVoices();
@@ -45,8 +85,25 @@ function pickVoice() {
   // YALNIZCA Türkçe ses atanır: Türkçe olmayan bir ses (ör. İngilizce) Türkçe
   // metne verilirse kelimeler yanlış telaffuzla okunur. Türkçe ses yoksa voice
   // alanı boş bırakılır, tarayıcı u.lang = "tr-TR" ile kendi seçsin.
-  trVoice = voices.find(isTurkish) ?? null;
+  allTurkish = voices.filter(isTurkish).sort((a, b) => voiceScore(b) - voiceScore(a));
+  const pref = readPref();
+  trVoice = (pref ? allTurkish.find((v) => v.name === pref) : undefined) ?? allTurkish[0] ?? null;
   notify();
+}
+
+/** Cihazdaki Türkçe sesler (kaliteye göre sıralı) — arayüzdeki seçici için. */
+export function getTurkishVoices(): { name: string; label: string }[] {
+  return allTurkish.map((v) => ({
+    name: v.name,
+    label: `${v.name}${v.localService === false ? " · çevrimiçi" : ""}`,
+  }));
+}
+
+/** Sesi elle seç; null verilirse otomatik (en kaliteli) seçime dönülür. */
+export function setPreferredVoice(name: string | null): void {
+  writePref(name);
+  cancelSpeech();
+  pickVoice();
 }
 
 if (supported) {
@@ -92,6 +149,8 @@ interface ActiveSpeech {
   /** Güvenlik zamanlayıcısı (onend gelmezse akış tıkanmasın). */
   watchdog: number | null;
   pending: number | null;
+  /** speak() gerçekten başladı mı diye bakılan denetim. */
+  startCheck: number | null;
   done: boolean;
   onEnd?: () => void;
 }
@@ -104,6 +163,7 @@ function closeActive(runOnEnd: boolean) {
   if (!a) return;
   if (a.watchdog !== null) window.clearTimeout(a.watchdog);
   if (a.pending !== null) window.clearTimeout(a.pending);
+  if (a.startCheck !== null) window.clearTimeout(a.startCheck);
   if (!a.done) {
     a.done = true;
     // Kesintiye uğrayan konuşma "bitti" sayılır: oyun akışı takılı kalmasın.
@@ -144,7 +204,13 @@ export function say(
     return;
   }
 
-  const entry: ActiveSpeech = { watchdog: null, pending: null, done: false, onEnd };
+  const entry: ActiveSpeech = {
+    watchdog: null,
+    pending: null,
+    startCheck: null,
+    done: false,
+    onEnd,
+  };
   active = entry;
 
   const finish = () => {
@@ -152,6 +218,8 @@ export function say(
     closeActive(false);
     onEnd?.();
   };
+
+  let retried = false;
 
   try {
     const u = new SpeechSynthesisUtterance(text);
@@ -174,7 +242,23 @@ export function say(
         window.speechSynthesis.speak(u);
       } catch {
         finish();
+        return;
       }
+      // Chrome cancel() sonrası ilk speak()'i bazen sessizce yutar: ses hiç
+      // başlamaz, çocuk hiçbir şey duymaz. Başlamadıysa bir kez daha dene.
+      entry.startCheck = window.setTimeout(() => {
+        entry.startCheck = null;
+        if (entry.done) return;
+        try {
+          const s = window.speechSynthesis;
+          if (!s.speaking && !s.pending) {
+            retried = true;
+            s.speak(u);
+          }
+        } catch {
+          /* yoksay */
+        }
+      }, 300);
     }, 90);
     entry.pending = speakTimer;
   } catch {

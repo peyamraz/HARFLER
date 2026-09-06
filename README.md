@@ -108,9 +108,22 @@ kesiliyor ve çocuk söylenenin sonunu duyamıyor.
 - Her söylem 70 karakteri aşmaz. `scan.test.tsx` bu üç kuralı 65 kombinasyonda
   otomatik denetler; `useSoundGame.test.tsx` tur söylemini birebir kilitler.
 
+## Ses seçimi
+
+Cihazda birden çok Türkçe ses olabiliyor ve kaliteleri çok farklı. Uygulama
+`voiceScore` ile sıralayıp en anlaşılır olanı seçer: `tr-TR` tam eşleşme,
+Google/çevrimiçi sesler ve `Natural`/`Neural` adlı sesler öne alınır, eski
+Windows SAPI sesleri geriye itilir. Öğretmen başlıktaki **Ses** listesinden
+elle de seçebilir; tercih `localStorage`'da saklanır ve seçim anında test
+cümlesi okunur. Türkçe ses yoksa `voice` alanı boş bırakılır.
+
+Chrome `cancel()` sonrası ilk `speak()` çağrısını bazen sessizce yutar; konuşma
+300 ms içinde başlamazsa bir kez daha denenir (çocuğun hiçbir şey duymamasını
+engeller).
+
 ## Testler
 
-`npm test` — 103 test: puan kuralları, ses grubu verisinin bütünlüğü, hece/harf sayacı,
+`npm test` — 107 test: puan kuralları, ses grubu verisinin bütünlüğü, hece/harf sayacı,
 tur motoru, `useSoundGame` tur akışı (sahte zamanlayıcı ve taklit ses motoruyla),
 konuşma katmanı (Türkçe ses yokken yabancı ses atanmadığı dahil),
 arayüzden oynanan tam tur, ZIP üreticisi (CRC-32 standart kontrol değeri dahil), İNDİR

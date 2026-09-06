@@ -2,7 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { GROUPS } from "./game/letters";
 import { REMEMBER_SECONDS, TOTAL_ROUNDS, useSoundGame } from "./game/useSoundGame";
 import { starsForScore } from "./game/scoring";
-import { cancelSpeech, getVoiceState, onVoiceStateChange, say } from "./game/speech";
+import {
+  cancelSpeech,
+  getTurkishVoices,
+  getVoiceState,
+  onVoiceStateChange,
+  say,
+  setPreferredVoice,
+} from "./game/speech";
 import { sfx } from "./game/sfx";
 import { LetterTile, type TileState } from "./components/LetterTile";
 import { CountdownRing } from "./components/CountdownRing";
@@ -241,6 +248,22 @@ export default function App() {
     });
   };
 
+  /** Cihazdaki Türkçe sesler; liste geç yüklenebildiği için durumla tazelenir. */
+  const [voiceList, setVoiceList] = useState<{ name: string; label: string }[]>(() =>
+    getTurkishVoices(),
+  );
+  useEffect(() => {
+    setVoiceList(getTurkishVoices());
+  }, [voice]);
+
+  const changeVoice = (name: string) => {
+    sfx.tap();
+    setPreferredVoice(name || null);
+    setVoiceList(getTurkishVoices());
+    // seçilen ses hemen duyulsun ki öğretmen karşılaştırabilsin
+    window.setTimeout(() => say("Ses denemesi: anne, nane, anneanne.", { rate: 0.8 }), 120);
+  };
+
   /** Ses denemesi: hangi sesin konuştuğunu öğretmen duysun. */
   const testVoice = () => {
     sfx.listen();
@@ -444,6 +467,23 @@ export default function App() {
             >
               <IconSpeaker className="w-3.5 h-3.5 text-sky-deep" /> Sesi dene
             </button>
+            {voiceList.length > 1 && (
+              <label className="inline-flex items-center gap-1.5">
+                <span className="text-ink-soft">Ses:</span>
+                <select
+                  value={voice.name ?? ""}
+                  onChange={(e) => changeVoice(e.target.value)}
+                  aria-label="Konuşma sesini seç"
+                  className="rounded-lg border-2 border-ink/15 bg-paper px-2 py-1 font-display font-bold text-[11px] text-ink"
+                >
+                  {voiceList.map((v) => (
+                    <option key={v.name} value={v.name}>
+                      {v.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
           </p>
         )}
         {!voice.supported && (
