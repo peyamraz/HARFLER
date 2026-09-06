@@ -272,15 +272,22 @@ export default function App() {
 
   /** Derlenmiş, kendi kendine yeten oyun dosyası sunucudan gelir (vite.config.js). */
   const fetchStandalone = async (): Promise<string> => {
-    const res = await fetch(new URL("standalone.html", document.baseURI).href, {
-      cache: "no-store",
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const doc = await res.text();
-    if (!/<script/i.test(doc) || !/<div id="root"/.test(doc)) {
-      throw new Error("Oyun dosyası eksik geldi");
+    try {
+      const res = await fetch(new URL("standalone.html", document.baseURI).href, {
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const doc = await res.text();
+        if (/<script/i.test(doc) && /<div id="root"/.test(doc)) return doc;
+      }
+    } catch {
+      /* file:// üzerinde ağ isteği olmaz: aşağıdaki yedeğe düşülür */
     }
-    return doc;
+    // Paket (file://) kopyası zaten kendi kendine yeten tek dosyadır;
+    // indirilecek oyun dosyası olarak belgenin kendisi kullanılır.
+    const self = "<!doctype html>\n" + document.documentElement.outerHTML;
+    if (/<script/i.test(self) && /<div id="root"/.test(self)) return self;
+    throw new Error("Oyun dosyası alınamadı");
   };
 
   const saveBlob = (blob: Blob, filename: string) => {

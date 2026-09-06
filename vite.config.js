@@ -86,8 +86,11 @@ async function buildStandaloneHtml() {
   // diziler replace kalıpları sanılıp HTML parçalarıyla değiştirilir (dosya bozulur).
   html = html.replace(/<\/body>/i, () => `<script>\n${jsCode}\n</script>\n</body>`);
 
-  // file:// üzerinden açılınca göreceli yollar kırılmasın
-  html = html.replace(/<head>/i, () => '<head>\n<base href="./" />');
+  // NOT: Buraya <base href="./" /> EKLENMEMELİ. Belge file:// üzerinde bir
+  // klasörde dururken taban URL klasöre çözülür ve menüdeki "#etkinlikler"
+  // gibi çapa bağlantıları belgenin kendisine değil klasöre gider: tarayıcı
+  // uygulamadan çıkar ve bölüm hiç açılmaz. Göreceli kaynak zaten yok
+  // (CSS/JS gömülü, fontlar mutlak https), dolayısıyla taban etiketi gereksiz.
 
   return html;
 }

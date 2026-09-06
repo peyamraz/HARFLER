@@ -37,6 +37,22 @@ describe.skipIf(!existsSync(FILE))("dist/standalone.html", () => {
     expect(html.trimEnd().endsWith("</html>")).toBe(true);
   });
 
+  it("menü çapaları belgenin kendisine gider: <base> etiketi yoktur", () => {
+    // <base href="./"> eklenirse, belge file:// üzerinde bir klasörde dururken
+    // taban URL klasöre çözülür: "#etkinlikler" çapası belgenin kendisine değil
+    // klasöre gider, tarayıcı uygulamadan çıkar ve bölüm hiç açılmaz.
+    expect(html, "<base etiketi geri gelmiş").not.toMatch(/<base[\s>]/i);
+
+    const docUrl = "file:///C:/Games/HARFLER-Ses-Avi.html";
+    const baseHref = html.match(/<base[^>]*href="([^"]*)"/)?.[1];
+    const base = baseHref ? new URL(baseHref, docUrl).href : docUrl;
+
+    for (const id of ["harfler", "av", "etkinlikler", "kelimeler", "bilgi", "indir"]) {
+      const target = new URL(`#${id}`, base).href;
+      expect(target, `#${id} çapası başka sayfaya gidiyor`).toBe(`${docUrl}#${id}`);
+    }
+  });
+
   it("gömülü betik modül sözdizimi içermez (klasik betik olarak çalışabilir)", async () => {
     const code = embeddedScript(html);
     const vm = await import("node:vm");

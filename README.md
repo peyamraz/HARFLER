@@ -74,6 +74,11 @@ derlemesini (JS + CSS) tek HTML'e gömer:
   da çalışan bir dosya verir.
 - Betik **klasik betik** olarak `#root`'tan sonra yazılır: `file://` üzerinde modül
   betikler CORS'a takılabiliyor, klasik betik çift tıklayınca her yerde çalışır.
+- HTML'e **`<base href="./">` eklenmez.** Belge `file://` üzerinde bir klasörde
+  dururken taban URL klasöre çözülür; menüdeki `#etkinlikler` gibi çapa bağlantıları
+  belgenin kendisine değil klasöre gider, tarayıcı uygulamadan çıkar ve bölüm hiç
+  açılmaz. Göreceli kaynak zaten yok (CSS/JS gömülü, fontlar mutlak `https`),
+  dolayısıyla taban etiketi gereksiz. `standalone.test.ts` bunu kilitler.
 
 İndirilen **ZIP** üç dosya içerir (`src/game/package.ts`):
 
@@ -91,7 +96,7 @@ Komut satırından paket almak için: `npm run pack`.
 
 ## Testler
 
-`npm test` — 97 test: puan kuralları, ses grubu verisinin bütünlüğü, hece/harf sayacı,
+`npm test` — 98 test: puan kuralları, ses grubu verisinin bütünlüğü, hece/harf sayacı,
 tur motoru, `useSoundGame` tur akışı (sahte zamanlayıcı ve taklit ses motoruyla),
 konuşma katmanı (Türkçe ses yokken yabancı ses atanmadığı dahil),
 arayüzden oynanan tam tur, ZIP üreticisi (CRC-32 standart kontrol değeri dahil), İNDİR
