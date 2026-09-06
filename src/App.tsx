@@ -295,6 +295,18 @@ export default function App() {
    * bazı tarayıcılar (özellikle çerçeve/önizleme içinde) programatik indirmeyi
    * sessizce engeller, o yüzden kullanıcıya tıklanabilir bir bağlantı da verilir.
    */
+  /**
+   * Sayfa bir çerçeve (iframe) içinde mi? Tarayıcılar çerçeve içinde
+   * kendiliğinden indirmeyi sessizce engeller; kullanıcıya bunu açıkça
+   * söylemek gerekiyor, yoksa "indirildi" sanıp dosya bekliyor.
+   */
+  const [framed] = useState(() => {
+    try {
+      return window.self !== window.top;
+    } catch {
+      return true; // farklı kökenden window.top'a erişilemiyorsa çerçevedeyiz
+    }
+  });
   const [readyFile, setReadyFile] = useState<{ url: string; name: string } | null>(null);
   const readyFileRef = useRef<{ url: string; name: string } | null>(null);
   useEffect(
@@ -1043,8 +1055,16 @@ export default function App() {
                   <IconCursor className="w-4 h-4 text-sky-deep" /> Sadece oyun dosyası (.html)
                 </button>
                 {readyFile && (
-                  <p className="font-bold text-sm text-ink bg-white/70 rounded-lg px-3 py-1.5">
-                    İndirme kendiliğinden başlamadıysa buradan kaydet:{" "}
+                  <p className="font-bold text-sm text-ink bg-white/70 rounded-lg px-3 py-2">
+                    {framed ? (
+                      <>
+                        Bu pencere bir önizleme çerçevesi; tarayıcı burada indirmeyi
+                        kendiliğinden başlatmıyor. Dosya hazır — bağlantıya{" "}
+                        <b>sağ tıkla → “Bağlantıyı farklı kaydet”</b>:{" "}
+                      </>
+                    ) : (
+                      <>İndirme kendiliğinden başlamadıysa buradan kaydet: </>
+                    )}
                     <a
                       href={readyFile.url}
                       download={readyFile.name}

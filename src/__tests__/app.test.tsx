@@ -224,6 +224,26 @@ describe("indirme", () => {
     expect(document.body.textContent).not.toContain("İNDİRİLDİ!");
   });
 
+  it("çerçeve içindeyse indirmenin engellendiğini açıkça söyler", async () => {
+    const desc = Object.getOwnPropertyDescriptor(window, "top");
+    Object.defineProperty(window, "top", { value: {}, configurable: true });
+    try {
+      render(<App />);
+      fireEvent.click(screen.getByRole("button", { name: /PAKETİ İNDİR/ }));
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      const body = document.body.textContent ?? "";
+      expect(body, "çerçeve uyarısı yok").toContain("önizleme çerçevesi");
+      expect(body).toContain("sağ tıkla");
+      expect(screen.getByRole("link", { name: "HARFLER-Ses-Avi.zip" })).toBeTruthy();
+    } finally {
+      if (desc) Object.defineProperty(window, "top", desc);
+    }
+  });
+
   it("Sadece oyun dosyası düğmesi .html indirir", async () => {
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: /Sadece oyun dosyası/ }));
