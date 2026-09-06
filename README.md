@@ -91,10 +91,11 @@ Komut satırından paket almak için: `npm run pack`.
 
 ## Testler
 
-`npm test` — 78 test: puan kuralları, ses grubu verisinin bütünlüğü, hece/harf sayacı,
+`npm test` — 80 test: puan kuralları, ses grubu verisinin bütünlüğü, hece/harf sayacı,
 tur motoru, `useSoundGame` tur akışı (sahte zamanlayıcı ve taklit ses motoruyla),
-arayüzden oynanan tam tur, ZIP üreticisi (CRC-32 standart kontrol değeri dahil) ve
-indirilen tek dosyanın gerçekten render olduğuna dair sağlama.
+arayüzden oynanan tam tur, ZIP üreticisi (CRC-32 standart kontrol değeri dahil), İNDİR
+düğmesinin gerçekten ZIP indirdiği ve indirilen tek dosyanın çalışıp render olduğuna dair
+sağlama.
 
 Konuşma sentezi taklidi `src/test/setup.ts` içindedir; gerçek Chrome gibi `cancel()`
 çağrısında `onend` tetikler, böylece oyun durdurma sırasındaki yarışlar da test edilir.

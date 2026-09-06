@@ -22,6 +22,16 @@ const tick = async (ms: number) => {
   });
 };
 
+/** jsdom Blob'unda arrayBuffer() yok; FileReader ile okunur. */
+function readBytes(b: Blob): Promise<ArrayBuffer> {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(fr.result as ArrayBuffer);
+    fr.onerror = () => reject(fr.error);
+    fr.readAsArrayBuffer(b);
+  });
+}
+
 describe("App", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -119,5 +129,80 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: /anneanne/ }));
     await tick(100);
     expect(getSpokenTexts().at(-1)).toBe("anneanne");
+  });
+});
+
+/* ------------------------------------------------ indirme akışı ---- */
+
+describe("indirme", () => {
+  const FAKE_HTML = '<!doctype html><div id="root"></div><script>void 0</script>';
+
+  /** jsdom Blob'unda arrayBuffer() yok; FileReader ile okunur. */
+  const readBytes = (b: Blob) =>
+    new Promise<ArrayBuffer>((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(fr.result as ArrayBuffer);
+      fr.onerror = () => reject(fr.error);
+      fr.readAsArrayBuffer(b);
+    });
+
+  beforeEach(() => {
+    localStorage.clear();
+    clearSpokenTexts();
+    // oyun dosyası sunucudan gelir
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, text: async () => FAKE_HTML })),
+    );
+    downloads.length = 0;
+    URL.createObjectURL = ((b: Blob) => {
+      pending = b;
+      return "blob:mock";
+    }) as typeof URL.createObjectURL;
+    URL.revokeObjectURL = (() => {}) as typeof URL.revokeObjectURL;
+    HTMLAnchorElement.prototype.click = function (this: HTMLAnchorElement) {
+      downloads.push({ name: this.download, blob: pending! });
+    };
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  let pending: Blob | null = null;
+  const downloads: { name: string; blob: Blob }[] = [];
+
+  it("PAKETİ İNDİR, içinde .bat olan geçerli bir ZIP indirir", async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /PAKETİ İNDİR/ }));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(downloads).toHaveLength(1);
+    expect(downloads[0].name).toBe("HARFLER-Ses-Avi.zip");
+    expect(downloads[0].blob.type).toBe("application/zip");
+
+    const bytes = new Uint8Array(await readBytes(downloads[0].blob));
+    expect([bytes[0], bytes[1]]).toEqual([0x50, 0x4b]); // "PK"
+    const listing = new TextDecoder().decode(bytes);
+    expect(listing).toContain("HARFLER-Ses-Avi.html");
+    expect(listing).toContain("HARFLER-Ses-Avi.bat");
+    expect(listing).toContain("OKU-BENI.txt");
+  });
+
+  it("Sadece oyun dosyası düğmesi .html indirir", async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /Sadece oyun dosyası/ }));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(downloads).toHaveLength(1);
+    expect(downloads[0].name).toBe("HARFLER-Ses-Avi.html");
+    const text = new TextDecoder().decode(await readBytes(downloads[0].blob));
+    expect(text).toBe(FAKE_HTML);
   });
 });
