@@ -333,6 +333,7 @@ function RealOrNot({ group, onExit, onComplete }: ActivityProps) {
     const real = Math.random() < 0.5;
     setQ({ s: real ? pick(group.words) : nonsenseOf(group), real });
     setChosen(null);
+    eng.arm();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eng.round, eng.runId, group]);
 

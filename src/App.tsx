@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { GROUPS } from "./game/letters";
 import { REMEMBER_SECONDS, TOTAL_ROUNDS, useSoundGame } from "./game/useSoundGame";
-import { say } from "./game/speech";
+import { starsForScore } from "./game/scoring";
+import { cancelSpeech, getVoiceState, onVoiceStateChange, say } from "./game/speech";
 import { sfx } from "./game/sfx";
 import { LetterTile, type TileState } from "./components/LetterTile";
 import { CountdownRing } from "./components/CountdownRing";
@@ -190,27 +191,74 @@ export default function App() {
   const [heroIdx, setHeroIdx] = useState(0);
   const heroLetter = group.letters[heroIdx % group.letters.length];
 
+  /* sekme başlığı seçili grubu izler */
+  useEffect(() => {
+    document.title = `${group.name} Ses Avı · 1. Sınıf Ses Grubu Oyunu`;
+  }, [group.name]);
+
+  /* Türkçe ses durumu (Chrome ses listesini geç yükleyebilir) */
+  const [voice, setVoice] = useState(getVoiceState);
+  useEffect(() => onVoiceStateChange(setVoice), []);
+
   /* "Sırayla Dinle" zamanlayıcıları: grup değişince iptal et */
   const seqTimers = useRef<number[]>([]);
-  useEffect(() => {
-    return () => {
-      seqTimers.current.forEach((t) => window.clearTimeout(t));
-      seqTimers.current = [];
-    };
-  }, [group.id]);
-  const playSequence = () => {
-    sfx.tap();
+  const clearSequence = () => {
     seqTimers.current.forEach((t) => window.clearTimeout(t));
     seqTimers.current = [];
+  };
+  const [seqPlaying, setSeqPlaying] = useState(false);
+  useEffect(() => {
+    return () => {
+      clearSequence();
+      setSeqPlaying(false);
+    };
+  }, [group.id]);
+
+  const playSequence = () => {
+    if (seqPlaying) {
+      clearSequence();
+      setSeqPlaying(false);
+      cancelSpeech();
+      sfx.tap();
+      return;
+    }
+    sfx.tap();
+    clearSequence();
+    setSeqPlaying(true);
     group.letters.forEach((l, i) => {
       seqTimers.current.push(
         window.setTimeout(() => {
+          setHeroIdx(i);
           sfx.listen();
           say(`${l.say}. örnek: ${l.word}`, { rate: 0.85 });
+          if (i === group.letters.length - 1) {
+            clearSequence();
+            setSeqPlaying(false);
+          }
         }, i * 1500),
       );
     });
   };
+
+  /* gezinme çubuğu: görünür bölümü vurgula */
+  const [activeSection, setActiveSection] = useState(NAV[0].id);
+  useEffect(() => {
+    const sections = NAV.map((n) => document.getElementById(n.id)).filter(
+      (el): el is HTMLElement => el !== null,
+    );
+    if (sections.length === 0 || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (visible?.target.id) setActiveSection(visible.target.id);
+      },
+      { rootMargin: "-96px 0px -55% 0px", threshold: [0.05, 0.25, 0.5] },
+    );
+    sections.forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, []);
 
   /* ---- tek dosyalık çevrimdışı sürümü indir ---- */
   const [dlState, setDlState] = useState<"idle" | "busy" | "ok" | "err">("idle");
@@ -219,40 +267,19 @@ export default function App() {
     sfx.tap();
     setDlState("busy");
     try {
-      const cssTags = Array.from(document.querySelectorAll<HTMLLinkElement>("link[rel='stylesheet']"));
-      const jsTags = Array.from(document.querySelectorAll<HTMLScriptElement>("script[src]"));
-      const cssParts: string[] = [];
-      for (const el of cssTags) {
-        const css = await fetch(el.href).then((r) => r.text());
-        cssParts.push(`<style>\n${css}\n</style>`);
-      }
-      const jsParts: string[] = [];
-      for (const el of jsTags) {
-        let js = await fetch(el.src).then((r) => r.text());
-        js = js.replace(/<\/script/gi, "<\\/script");
-        jsParts.push(`<script type="module">\n${js}\n<\/script>`);
-      }
-      const doc = `<!doctype html>
-<html lang="tr">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>ANETİL Ses Avı · Çevrimdışı Sürüm</title>
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
-${cssParts.join("\n")}
-</head>
-<body>
-<div id="root"></div>
-${jsParts.join("\n")}
-</body>
-</html>`;
+      // Derlenmiş, kendi kendine yeten sürüm sunucudan gelir (vite.config.js).
+      const res = await fetch(new URL("standalone.html", document.baseURI).href, {
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const doc = await res.text();
+      if (!/<script/i.test(doc)) throw new Error("Dosya boş geldi");
+
       const blob = new Blob([doc], { type: "text/html;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "anetil-ses-avi.html";
+      a.download = "harfler-ses-avi.html";
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -260,7 +287,8 @@ ${jsParts.join("\n")}
       sfx.win();
       setDlState("ok");
       window.setTimeout(() => setDlState("idle"), 3200);
-    } catch {
+    } catch (err) {
+      console.error("[İndirme hatası]", err);
       sfx.wrong();
       setDlState("err");
       window.setTimeout(() => setDlState("idle"), 4000);
@@ -298,7 +326,7 @@ ${jsParts.join("\n")}
                 Maarif Modeli 2026-2027 · Ses Grupları
               </p>
               <h1 className="title-toy font-display text-3xl sm:text-4xl leading-none mt-1">
-                ANETİL <span className="text-sky-deep">Ses Avı</span>
+                {group.name} <span className="text-sky-deep">Ses Avı</span>
               </h1>
             </div>
           </div>
@@ -329,10 +357,16 @@ ${jsParts.join("\n")}
           </div>
         </header>
 
-        {!g.speechOk && (
+        {voice.supported && voice.ready && !voice.turkish && (
           <div className="sticker-sm rounded-xl bg-amber/40 px-4 py-2.5 text-sm font-semibold text-ink mb-4">
-            Tarayıcında Türkçe ses bulunamadı; oyun efekt sesleriyle devam eder. Chrome veya Edge
-            önerilir.
+            Tarayıcında Türkçe ses bulunamadı; kelimeler varsayılan sesle okunur. Doğru telaffuz
+            için Chrome veya Edge önerilir.
+          </div>
+        )}
+        {!voice.supported && (
+          <div className="sticker-sm rounded-xl bg-amber/40 px-4 py-2.5 text-sm font-semibold text-ink mb-4">
+            Bu tarayıcı konuşma sentezini desteklemiyor; oyun efekt sesleriyle ve ekrandaki
+            harflerle oynanabilir.
           </div>
         )}
 
@@ -343,7 +377,12 @@ ${jsParts.join("\n")}
               <a
                 key={n.id}
                 href={`#${n.id}`}
-                className="shrink-0 rounded-full border-2 border-ink/15 bg-paper px-4 py-1.5 font-display font-bold text-sm text-ink hover:border-ink hover:-translate-y-0.5 transition-all"
+                aria-current={activeSection === n.id ? "true" : undefined}
+                className={`shrink-0 rounded-full border-2 px-4 py-1.5 font-display font-bold text-sm transition-all hover:-translate-y-0.5 ${
+                  activeSection === n.id
+                    ? "border-ink bg-ink text-mint"
+                    : "border-ink/15 bg-paper text-ink hover:border-ink"
+                }`}
               >
                 <span className="mr-1.5 font-black" style={{ color: FLOAT_COLORS[i % FLOAT_COLORS.length] }}>
                   {i + 1}
@@ -363,10 +402,21 @@ ${jsParts.join("\n")}
             right={
               <button
                 type="button"
-                className="btn-toy sticker-sm rounded-xl bg-grape text-white px-4 py-2.5 font-display font-bold text-sm flex items-center gap-2"
+                className={`btn-toy sticker-sm rounded-xl px-4 py-2.5 font-display font-bold text-sm flex items-center gap-2 ${
+                  seqPlaying ? "bg-ink text-mint" : "bg-grape text-white"
+                }`}
                 onClick={playSequence}
+                aria-pressed={seqPlaying}
               >
-                <IconPlay className="w-4 h-4" /> Sırayla Dinle
+                {seqPlaying ? (
+                  <>
+                    <IconX className="w-4 h-4" /> Durdur
+                  </>
+                ) : (
+                  <>
+                    <IconPlay className="w-4 h-4" /> Sırayla Dinle
+                  </>
+                )}
               </button>
             }
           />
@@ -636,7 +686,7 @@ ${jsParts.join("\n")}
 
             {/* ---- geri bildirim ---- */}
             {g.status === "feedback" && (
-              <div className="text-center py-6 anim-pop">
+              <div className="text-center py-6 anim-pop" aria-live="polite" role="status">
                 {g.correctId ? (
                   <>
                     <div className="inline-flex items-center gap-3 sticker rounded-2xl bg-leaf text-white px-7 py-4 mb-4">
@@ -686,8 +736,8 @@ ${jsParts.join("\n")}
                   {[0, 1, 2].map((i) => (
                     <IconStar
                       key={i}
-                      className={`w-10 h-10 ${i < starsFor(g.score) ? "text-amber-deep" : "text-ink/15"}`}
-                      filled={i < starsFor(g.score)}
+                      className={`w-10 h-10 ${i < starsForScore(g.score) ? "text-amber-deep" : "text-ink/15"}`}
+                      filled={i < starsForScore(g.score)}
                     />
                   ))}
                 </div>
@@ -865,7 +915,7 @@ ${jsParts.join("\n")}
                   Oyunu indir, her yerde oyna
                 </h2>
                 <p className="text-ink font-semibold text-sm sm:text-base max-w-lg">
-                  Tek dosyalık <span className="font-black">anetil-ses-avi.html</span> iner. Sınıfta
+                  Tek dosyalık <span className="font-black">harfler-ses-avi.html</span> iner. Sınıfta
                   akıllı tahtada, evde bilgisayarda, internetsiz telefonda bile çift tıklayıp
                   açarsın. Skorlar cihazda saklanır.
                 </p>
@@ -930,11 +980,4 @@ ${jsParts.join("\n")}
       </div>
     </div>
   );
-}
-
-function starsFor(score: number): number {
-  if (score >= 160) return 3;
-  if (score >= 100) return 2;
-  if (score >= 50) return 1;
-  return 0;
 }

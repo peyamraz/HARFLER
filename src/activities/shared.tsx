@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { GroupDef, LetterDef } from "../game/letters";
-import { shuffle } from "../game/letters";
+import { GROUPS, shuffle, trVowelChars } from "../game/letters";
+import { ACTIVITY_FAST_ANSWER_MS, scoreAnswer, starsForRatio } from "../game/scoring";
 import { cancelSpeech, say, sayQuick } from "../game/speech";
 import { sfx } from "../game/sfx";
 import { IconCheck, IconFlame, IconReplay, IconSparkle, IconStar, IconX } from "../components/Icons";
@@ -46,8 +47,13 @@ export function ensureOpts(group: GroupDef, correct: LetterDef, count = 6): Lett
   return shuffle([correct, ...sample(others, count - 1)]);
 }
 
+/**
+ * Türkçe hece sayısı = ünlü sayısı.
+ * Türkçede ikiz ünlü (diftong) yoktur: "anneanne" 4 hecedir, yan yana gelen
+ * ünlüler de ayrı hece sayılır. Bu yüzden ünlü KÜMESİ değil, ünlü sayılır.
+ */
 export function syllableCount(word: string): number {
-  const m = word.toLocaleLowerCase("tr-TR").match(/[aeıioöuü]+/g);
+  const m = word.toLocaleLowerCase("tr-TR").match(/[aeıioöuü]/g);
   return m ? m.length : 1;
 }
 
@@ -75,23 +81,45 @@ export function wordsForAnswer(group: GroupDef, answerOf: (w: string) => LetterD
   return ok.length > 0 ? ok : group.words;
 }
 
-/** Grup kelimelerindeki harflerden uydurma (anlamsız) hece dizisi üretir. */
+/**
+ * Grup kelimelerindeki harflerden uydurma (anlamsız) hece dizisi üretir.
+ * Aday en az bir "yabancı" harf ikilisi içerir — yani grubun kelime
+ * dağarcığında hiç geçmeyen bir ikili — böylece çocuk gerçek bir kelimeyi
+ * yanlışlıkla "uydurma" sanmaz.
+ */
 export function nonsenseOf(group: GroupDef): string {
   const chars = new Set<string>();
   group.words.forEach((w) => w.split("").forEach((c) => chars.add(c)));
-  const vs = [...chars].filter((c) => "aeıioöuü".includes(c));
-  const cs = [...chars].filter((c) => !"aeıioöuü".includes(c));
+  const vs = [...chars].filter((c) => trVowelChars.has(c));
+  const cs = [...chars].filter((c) => !trVowelChars.has(c));
   if (vs.length === 0 || cs.length === 0) return "lalala";
+
+  /** Tüm grupların kelimeleri: üretilen dizi bunlardan biri olmasın. */
+  const known = new Set<string>(GROUPS.flatMap((g) => g.words));
+  /** Grubun kelimelerinde geçen harf ikilileri. */
+  const bigrams = new Set<string>();
+  group.words.forEach((w) => {
+    for (let i = 0; i < w.length - 1; i++) bigrams.add(w.slice(i, i + 2));
+  });
+
   const v = () => pick(vs);
   const c = () => pick(cs);
-  for (let attempt = 0; attempt < 25; attempt++) {
+  for (let attempt = 0; attempt < 40; attempt++) {
     let s = "";
     const parts = 2 + Math.floor(Math.random() * 2);
     for (let i = 0; i < parts; i++) {
       const p = pick(["cv", "vc", "cvc"]);
       s += p === "cv" ? c() + v() : p === "vc" ? v() + c() : c() + v() + c();
     }
-    if (s.length >= 4 && !group.words.includes(s)) return s;
+    if (s.length < 5 || known.has(s)) continue;
+    let foreign = false;
+    for (let i = 0; i < s.length - 1; i++) {
+      if (!bigrams.has(s.slice(i, i + 2))) {
+        foreign = true;
+        break;
+      }
+    }
+    if (foreign) return s;
   }
   return "tenele";
 }
@@ -103,6 +131,8 @@ export function nonsenseOf(group: GroupDef): string {
 export interface Engine {
   round: number;
   runId: number;
+  /** Oynanmış turların sonuçları (true = doğru); tur noktaları buna göre çizilir. */
+  results: boolean[];
   score: number;
   streak: number;
   correct: number;
@@ -119,6 +149,7 @@ export interface Engine {
 export function useEngine(total: number, onComplete: (r: ActivityResult) => void): Engine {
   const [round, setRound] = useState(1);
   const [runId, setRunId] = useState(0);
+  const [results, setResults] = useState<boolean[]>([]);
   const [score, setScore] = useState(0);
   const [streak, setStreak] = useState(0);
   const [correct, setCorrect] = useState(0);
@@ -127,6 +158,7 @@ export function useEngine(total: number, onComplete: (r: ActivityResult) => void
   const [stars, setStars] = useState(0);
 
   const roundRef = useRef(1);
+  const resultsRef = useRef<boolean[]>([]);
   const scoreRef = useRef(0);
   const correctRef = useRef(0);
   const streakRef = useRef(0);
@@ -158,6 +190,9 @@ export function useEngine(total: number, onComplete: (r: ActivityResult) => void
       if (lockRef.current || doneRef.current) return;
       lockRef.current = true;
 
+      resultsRef.current = [...resultsRef.current, ok];
+      setResults(resultsRef.current);
+
       const finishRound = (delay: number) => {
         after(() => {
           lockRef.current = false;
@@ -167,8 +202,7 @@ export function useEngine(total: number, onComplete: (r: ActivityResult) => void
             doneRef.current = true;
             sfx.win();
             setDone(true);
-            const ratio = correctRef.current / total;
-            const starCount = ratio >= 0.9 ? 3 : ratio >= 0.65 ? 2 : ratio >= 0.4 ? 1 : 0;
+            const starCount = starsForRatio(correctRef.current, total);
             setStars(starCount);
             onCompleteRef.current({
               score: scoreRef.current,
@@ -184,10 +218,17 @@ export function useEngine(total: number, onComplete: (r: ActivityResult) => void
       };
 
       if (ok) {
-        const fast = armedAtRef.current > 0 && Date.now() - armedAtRef.current < 4000;
-        const hot = streakRef.current >= 3;
-        const extra = (fast ? 5 : 0) + (hot ? 5 : 0);
-        const gained = 10 + extra;
+        const elapsedMs =
+          armedAtRef.current > 0 ? Date.now() - armedAtRef.current : Number.POSITIVE_INFINITY;
+        const {
+          points: gained,
+          bonus: extra,
+          hot,
+        } = scoreAnswer({
+          elapsedMs,
+          streakBefore: streakRef.current,
+          fastMs: ACTIVITY_FAST_ANSWER_MS,
+        });
         scoreRef.current += gained;
         correctRef.current += 1;
         streakRef.current += 1;
@@ -218,6 +259,7 @@ export function useEngine(total: number, onComplete: (r: ActivityResult) => void
     timers.current = [];
     cancelSpeech();
     roundRef.current = 1;
+    resultsRef.current = [];
     scoreRef.current = 0;
     correctRef.current = 0;
     streakRef.current = 0;
@@ -225,6 +267,7 @@ export function useEngine(total: number, onComplete: (r: ActivityResult) => void
     doneRef.current = false;
     armedAtRef.current = 0;
     setRound(1);
+    setResults([]);
     setScore(0);
     setCorrect(0);
     setStreak(0);
@@ -237,6 +280,7 @@ export function useEngine(total: number, onComplete: (r: ActivityResult) => void
   return {
     round,
     runId,
+    results,
     score,
     streak,
     correct,
@@ -317,7 +361,15 @@ export function Shell({
       {/* tur noktaları */}
       <div className="flex items-center justify-center gap-1.5 py-3">
         {Array.from({ length: eng.total }, (_, i) => {
-          const state = i < eng.correct ? "bg-leaf" : i === eng.round - 1 && !eng.done ? "bg-sky anim-pulse-soft" : "bg-ink/15";
+          const res = eng.results[i];
+          const state =
+            res === true
+              ? "bg-leaf"
+              : res === false
+                ? "bg-coral/70"
+                : i === eng.round - 1 && !eng.done
+                  ? "bg-sky anim-pulse-soft"
+                  : "bg-ink/15";
           return <span key={i} className={`w-3 h-3 rounded-full border-2 border-ink/30 ${state}`} />;
         })}
       </div>

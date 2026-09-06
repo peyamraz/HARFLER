@@ -1,6 +1,7 @@
 /** Türkçe ses sentezi sarmalayıcısı — tarayıcının tr-TR sesiyle okur. */
 
 let trVoice: SpeechSynthesisVoice | null = null;
+let voiceKnown = false; // ses listesi en az bir kez geldi mi (Chrome bunu geç yükler)
 let muted = false;
 let speakTimer: number | null = null;
 
@@ -9,14 +10,38 @@ const supported =
   "speechSynthesis" in window &&
   typeof SpeechSynthesisUtterance !== "undefined";
 
+export interface VoiceState {
+  /** Tarayıcıda konuşma sentezi API'si var mı? */
+  supported: boolean;
+  /** Ses listesi yüklendi mi? (yüklendiyse turkish bilgisi güvenilirdir) */
+  ready: boolean;
+  /** Türkçe bir ses bulundu mu? */
+  turkish: boolean;
+}
+
+type Listener = (s: VoiceState) => void;
+const listeners = new Set<Listener>();
+
+function currentState(): VoiceState {
+  return { supported, ready: voiceKnown, turkish: trVoice !== null && isTurkish(trVoice) };
+}
+
+function notify() {
+  const s = currentState();
+  listeners.forEach((l) => l(s));
+}
+
+function isTurkish(v: SpeechSynthesisVoice): boolean {
+  return !!v.lang && v.lang.toLowerCase().replace("_", "-").startsWith("tr");
+}
+
 function pickVoice() {
   if (!supported) return;
   const voices = window.speechSynthesis.getVoices();
-  trVoice =
-    voices.find((v) => v.lang && v.lang.toLowerCase().replace("_", "-").startsWith("tr")) ??
-    voices.find((v) => v.default) ??
-    voices[0] ??
-    null;
+  if (voices.length > 0) voiceKnown = true;
+  trVoice = voices.find(isTurkish) ?? null;
+  if (!trVoice) trVoice = voices.find((v) => v.default) ?? voices[0] ?? null;
+  notify();
 }
 
 if (supported) {
@@ -32,12 +57,51 @@ export function isSpeechSupported(): boolean {
   return supported;
 }
 
+/** Anlık ses durumu + değişiklik dinleyicisi (Türkçe ses yoksa arayüz uyarır). */
+export function getVoiceState(): VoiceState {
+  return currentState();
+}
+
+export function onVoiceStateChange(listener: Listener): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
 export function setMuted(m: boolean) {
   muted = m;
   if (m) cancelSpeech();
 }
 
+export function isMuted(): boolean {
+  return muted;
+}
+
+interface ActiveSpeech {
+  /** Güvenlik zamanlayıcısı (onend gelmezse akış tıkanmasın). */
+  watchdog: number | null;
+  pending: number | null;
+  done: boolean;
+  onEnd?: () => void;
+}
+
+let active: ActiveSpeech | null = null;
+
+function closeActive(runOnEnd: boolean) {
+  const a = active;
+  active = null;
+  if (!a) return;
+  if (a.watchdog !== null) window.clearTimeout(a.watchdog);
+  if (a.pending !== null) window.clearTimeout(a.pending);
+  if (!a.done) {
+    a.done = true;
+    // Kesintiye uğrayan konuşma "bitti" sayılır: oyun akışı takılı kalmasın.
+    if (runOnEnd) a.onEnd?.();
+  }
+}
+
+/** Konuşmayı dışarıdan durdurur (oyun durdu, ses kapatıldı): onEnd ÇAĞRILMAZ. */
 export function cancelSpeech() {
+  closeActive(false);
   if (!supported) return;
   if (speakTimer !== null) {
     window.clearTimeout(speakTimer);
@@ -51,21 +115,29 @@ export function cancelSpeech() {
  * - cancel() sonrası speak() Chrome'da sessizce yutulabildiği için
  *   konuşma küçük bir gecikmeyle başlatılır.
  * - TTS yoksa/sessizse bile akış aksamaz: onEnd tahmini sürede çağrılır.
+ * - Yeni bir konuşma öncekini keserse önceki onEnd yine çağrılır
+ *   (aksi hâlde tur akışı "dinle" aşamasında takılı kalırdı).
  */
 export function say(
   text: string,
   opts?: { rate?: number; pitch?: number; onEnd?: () => void },
 ): void {
   const { rate = 0.82, pitch = 1.12, onEnd } = opts ?? {};
+
+  // önceki konuşmayı kapat (onEnd'i çalıştırarak)
+  closeActive(true);
+
   if (!supported || muted) {
     if (onEnd) window.setTimeout(onEnd, Math.min(750, 280 + text.length * 40));
     return;
   }
 
-  let done = false;
+  const entry: ActiveSpeech = { watchdog: null, pending: null, done: false, onEnd };
+  active = entry;
+
   const finish = () => {
-    if (done) return;
-    done = true;
+    if (entry.done) return;
+    closeActive(false);
     onEnd?.();
   };
 
@@ -79,18 +151,20 @@ export function say(
     u.onend = finish;
     u.onerror = finish;
     // güvenlik: bazı tarayıcılarda onend hiç/geç gelebiliyor
-    window.setTimeout(finish, 1800 + text.length * 120);
+    entry.watchdog = window.setTimeout(finish, 1800 + text.length * 120);
 
     if (speakTimer !== null) window.clearTimeout(speakTimer);
     window.speechSynthesis.cancel();
     speakTimer = window.setTimeout(() => {
       speakTimer = null;
+      entry.pending = null;
       try {
         window.speechSynthesis.speak(u);
       } catch {
         finish();
       }
     }, 90);
+    entry.pending = speakTimer;
   } catch {
     finish();
   }
