@@ -146,6 +146,9 @@ karakterleri yanlış yorumlayabiliyor. ZIP, `src/game/zip.ts` içindeki bağım
 üreticiyle hazırlanır (CRC-32 standart kontrol değeri `0xCBF43926` ile doğrulanır) ve
 `unzip` / Python `zipfile` ile test edilir.
 
+Hazır paket kolaylık olması için depoda da tutulur: [`HARFLER-Ses-Avi.zip`](HARFLER-Ses-Avi.zip).
+Kodu değiştirip paketi tazelemek için `npm run pack` çalıştır ve yeni ZIP'i de commit'le.
+
 ### İndirme düğmesi
 
 Düğme dosyayı hazırlayıp hem otomatik indirmeyi tetikler hem **tıklanabilir bir bağlantı**
