@@ -290,6 +290,20 @@ export default function App() {
     throw new Error("Oyun dosyası alınamadı");
   };
 
+  /**
+   * Hazırlanan dosya hem otomatik indirilir hem de bağlantı olarak gösterilir:
+   * bazı tarayıcılar (özellikle çerçeve/önizleme içinde) programatik indirmeyi
+   * sessizce engeller, o yüzden kullanıcıya tıklanabilir bir bağlantı da verilir.
+   */
+  const [readyFile, setReadyFile] = useState<{ url: string; name: string } | null>(null);
+  const readyFileRef = useRef<{ url: string; name: string } | null>(null);
+  useEffect(
+    () => () => {
+      if (readyFileRef.current) URL.revokeObjectURL(readyFileRef.current.url);
+    },
+    [],
+  );
+
   const saveBlob = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -298,7 +312,9 @@ export default function App() {
     document.body.appendChild(a);
     a.click();
     a.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+    if (readyFileRef.current) URL.revokeObjectURL(readyFileRef.current.url);
+    readyFileRef.current = { url, name: filename };
+    setReadyFile({ url, name: filename });
   };
 
   const runDownload = async (kind: "paket" | "html") => {
@@ -373,7 +389,7 @@ export default function App() {
             >
               <IconDownload className={`w-5 h-5 ${dlState === "busy" ? "anim-pulse-soft" : ""}`} />
               <span className="hidden sm:inline">
-                {dlState === "busy" ? "HAZIRLANIYOR…" : dlState === "ok" ? "İNDİRİLDİ!" : dlState === "err" ? "TEKRAR DENE" : "İNDİR"}
+                {dlState === "busy" ? "HAZIRLANIYOR…" : dlState === "ok" ? "DOSYA HAZIR" : dlState === "err" ? "TEKRAR DENE" : "İNDİR"}
               </span>
             </button>
             <button
@@ -1009,7 +1025,7 @@ export default function App() {
                     </>
                   ) : dlState === "ok" ? (
                     <>
-                      <IconCheck className="w-6 h-6" /> İNDİRİLDİ!
+                      <IconCheck className="w-6 h-6" /> DOSYA HAZIR
                     </>
                   ) : (
                     <>
@@ -1026,6 +1042,18 @@ export default function App() {
                 >
                   <IconCursor className="w-4 h-4 text-sky-deep" /> Sadece oyun dosyası (.html)
                 </button>
+                {readyFile && (
+                  <p className="font-bold text-sm text-ink bg-white/70 rounded-lg px-3 py-1.5">
+                    İndirme kendiliğinden başlamadıysa buradan kaydet:{" "}
+                    <a
+                      href={readyFile.url}
+                      download={readyFile.name}
+                      className="underline decoration-[3px] text-sky-deep"
+                    >
+                      {readyFile.name}
+                    </a>
+                  </p>
+                )}
                 {dlState === "err" && (
                   <p className="font-bold text-sm text-coral-deep bg-white/70 rounded-lg px-3 py-1.5">
                     İndirme hazırlanamadı, tekrar dene.

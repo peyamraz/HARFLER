@@ -208,6 +208,22 @@ describe("indirme", () => {
     expect(listing).toContain("OKU-BENI.txt");
   });
 
+  it("dosya hazır olunca tıklanabilir yedek bağlantı da gösterilir", async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /PAKETİ İNDİR/ }));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const link = screen.getByRole("link", { name: "HARFLER-Ses-Avi.zip" });
+    expect(link.getAttribute("download")).toBe("HARFLER-Ses-Avi.zip");
+    expect(link.getAttribute("href"), "blob adresi bağlanmamış").toBe("blob:mock");
+    // düğme artık başarıyı kesinmiş gibi söylemiyor
+    expect(document.body.textContent).toContain("DOSYA HAZIR");
+    expect(document.body.textContent).not.toContain("İNDİRİLDİ!");
+  });
+
   it("Sadece oyun dosyası düğmesi .html indirir", async () => {
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: /Sadece oyun dosyası/ }));

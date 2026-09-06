@@ -110,7 +110,7 @@ kesiliyor ve çocuk söylenenin sonunu duyamıyor.
 
 ## Testler
 
-`npm test` — 100 test: puan kuralları, ses grubu verisinin bütünlüğü, hece/harf sayacı,
+`npm test` — 101 test: puan kuralları, ses grubu verisinin bütünlüğü, hece/harf sayacı,
 tur motoru, `useSoundGame` tur akışı (sahte zamanlayıcı ve taklit ses motoruyla),
 konuşma katmanı (Türkçe ses yokken yabancı ses atanmadığı dahil),
 arayüzden oynanan tam tur, ZIP üreticisi (CRC-32 standart kontrol değeri dahil), İNDİR
