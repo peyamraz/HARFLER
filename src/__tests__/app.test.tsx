@@ -115,6 +115,18 @@ describe("App", () => {
     expect(localStorage.getItem("ses-avi-sessiz")).toBe("1");
   });
 
+  it("sayfanın en sonunda geliştirici ve kullanım notu vardır", () => {
+    render(<App />);
+    const footer = document.querySelector("footer")!;
+    expect(footer).toBeTruthy();
+    expect(footer.textContent).toContain(
+      "Geliştirici: Mehmet Reşat Raz — Ücretsiz indir ve kullan. Ticari amaçla kullanılamaz.",
+    );
+    // sayfanın en sonundaki öge olmalı
+    const last = footer.parentElement!.lastElementChild;
+    expect(last, "footer son öge değil").toBe(footer);
+  });
+
   it("harfe dokununca yalnızca ses, kelimeye dokununca yalnızca kelime okunur", async () => {
     render(<App />);
     clearSpokenTexts();

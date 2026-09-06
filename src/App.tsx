@@ -1093,6 +1093,10 @@ export default function App() {
             Maarif Modeli 2026-2027 · 1. sınıf ilk okuma-yazma · Sesler cihazının Türkçe ses
             motoruyla okunur.
           </p>
+          <p className="mt-3 pt-3 border-t-[3px] border-dashed border-ink/15 text-ink font-display font-bold">
+            Geliştirici: Mehmet Reşat Raz — Ücretsiz indir ve kullan. Ticari amaçla
+            kullanılamaz.
+          </p>
         </footer>
       </div>
     </div>
