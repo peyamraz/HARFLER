@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
 import App from "./App.tsx";
+import { Analytics } from "@vercel/analytics/react";
 
 /** Uygulama seviyesinde beklenmedik bir hata olursa beyaz ekran yerine bilgi göster. */
 class AppBoundary extends React.Component<{ children: React.ReactNode }, { failed: boolean }> {
@@ -62,5 +63,6 @@ class AppBoundary extends React.Component<{ children: React.ReactNode }, { faile
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <AppBoundary>
     <App />
+    <Analytics />
   </AppBoundary>,
 );
